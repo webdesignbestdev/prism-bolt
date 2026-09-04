@@ -1,0 +1,1298 @@
+<title>Prism Bolt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  :root {
+    --ground:     #f4f3ef;
+    --ink:        #14161b;
+    --ink-soft:   rgba(20, 22, 27, 0.52);
+    --ink-faint:  rgba(20, 22, 27, 0.30);
+    --panel:      rgba(252, 252, 250, 0.62);
+    --panel-edge: rgba(20, 22, 27, 0.14);
+    --track:      rgba(20, 22, 27, 0.16);
+    --knob:       #14161b;
+  }
+  :root[data-ground="dark"] {
+    --ground:     #07080b;
+    --ink:        #eef0f5;
+    --ink-soft:   rgba(238, 240, 245, 0.52);
+    --ink-faint:  rgba(238, 240, 245, 0.26);
+    --panel:      rgba(255, 255, 255, 0.05);
+    --panel-edge: rgba(255, 255, 255, 0.10);
+    --track:      rgba(255, 255, 255, 0.16);
+    --knob:       #eef0f5;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    transition: background 420ms cubic-bezier(0.33, 1, 0.68, 1), color 420ms cubic-bezier(0.33, 1, 0.68, 1);
+  }
+
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  #gl:active { cursor: grabbing; }
+
+  .lab {
+    position: fixed; z-index: 3;
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink-soft); pointer-events: none; user-select: none;
+  }
+  .lab.tl { top: 22px; left: 24px; }
+  .lab.bl { bottom: 22px; left: 24px; color: var(--ink-faint); }
+
+  /* ---- control panel ---------------------------------------------------- */
+  .panel {
+    position: fixed; z-index: 4; top: 18px; right: 18px; width: 226px;
+    padding: 14px 15px 13px;
+    border-radius: 13px;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    backdrop-filter: blur(28px) saturate(1.5);
+    -webkit-backdrop-filter: blur(28px) saturate(1.5);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.16);
+    transition: background 420ms, border-color 420ms;
+  }
+  .panel[data-open="0"] .body { display: none; }
+
+  .phead {
+    display: flex; width: 100%; align-items: center; justify-content: space-between;
+    font: inherit; background: none; border: 0; padding: 0; text-align: left;
+    font-size: 9.5px; letter-spacing: 0.17em; text-transform: uppercase;
+    color: var(--ink-soft); cursor: pointer; user-select: none;
+  }
+  .phead b { font-weight: 500; }
+  .chev { font-size: 11px; opacity: 0.7; transition: transform 320ms cubic-bezier(0.33, 1, 0.68, 1); }
+  .panel[data-open="0"] .chev { transform: rotate(-90deg); }
+
+  .body { margin-top: 12px; max-height: 72vh; overflow-y: auto; }
+  .grp {
+    font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--ink-faint); margin: 13px 0 7px;
+    padding-top: 9px; border-top: 1px solid var(--panel-edge);
+  }
+  .grp:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+
+  .seg { display: flex; gap: 4px; margin-bottom: 13px; }
+  .seg button {
+    flex: 1; font: inherit; font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 7px 0; border-radius: 8px; cursor: pointer;
+    color: var(--ink-soft); background: transparent;
+    border: 1px solid var(--panel-edge);
+    transition: color 220ms, background 220ms, border-color 220ms, transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .seg button:hover { color: var(--ink); }
+  .seg button[aria-pressed="true"] {
+    color: var(--ground); background: var(--knob); border-color: var(--knob); transform: scale(1.03);
+  }
+
+  .row { margin-bottom: 9px; }
+  .row .top {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-soft);
+    margin-bottom: 5px;
+  }
+  .row .top span:last-child { color: var(--ink-faint); letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 14px;
+    background: transparent; cursor: pointer; display: block;
+  }
+  input[type=range]::-webkit-slider-runnable-track { height: 2px; border-radius: 2px; background: var(--track); }
+  input[type=range]::-moz-range-track { height: 2px; border-radius: 2px; background: var(--track); }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 10px; height: 10px; margin-top: -4px;
+    border-radius: 50%; background: var(--knob); border: none;
+    transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--knob); border: none;
+  }
+  input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.35); }
+  input[type=range]:active::-webkit-slider-thumb { transform: scale(1.15); }
+
+  .reset {
+    margin-top: 12px; width: 100%; font: inherit; font-size: 9px; letter-spacing: 0.13em;
+    text-transform: uppercase; padding: 7px 0; border-radius: 8px; cursor: pointer;
+    color: var(--ink-soft); background: transparent; border: 1px solid var(--panel-edge);
+    transition: color 220ms, border-color 220ms;
+  }
+  .reset:hover { color: var(--ink); border-color: var(--knob); }
+
+  .seg button:focus-visible,
+  .reset:focus-visible,
+  .phead:focus-visible,
+  input[type=range]:focus-visible {
+    outline: 2px solid var(--knob);
+    outline-offset: 3px;
+    border-radius: 8px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 1ms !important; }
+  }
+
+  #fallback {
+    position: fixed; inset: 0; display: none; place-items: center; text-align: center;
+    padding: 40px; font-size: 12px; line-height: 1.7; color: var(--ink-soft);
+  }
+  #fallback.show { display: grid; }
+
+  @media (max-width: 640px) {
+    .panel { top: auto; bottom: 14px; right: 14px; left: 14px; width: auto; }
+    .lab.bl { display: none; }
+  }
+</style>
+
+<canvas id="gl" aria-label="Interactive 3D dispersive-glass bolt. Drag to rotate."></canvas>
+
+<div class="lab tl">Prism Bolt — dispersive glass</div>
+<div class="lab bl">Drag to rotate · scroll to zoom</div>
+
+<div class="panel" id="panel" data-open="1">
+  <button class="phead" id="phead" type="button" aria-expanded="true" aria-controls="pbody"><b>Material</b><span class="chev">▾</span></button>
+  <div class="body" id="pbody">
+    <div class="seg" role="group" aria-label="Ground">
+      <button id="gLight" aria-pressed="false">Light</button>
+      <button id="gDark"  aria-pressed="true">Dark</button>
+    </div>
+    <div class="seg" role="group" aria-label="Mark form">
+      <button id="fSolid"   aria-pressed="true">Solid</button>
+      <button id="fOutline" aria-pressed="false">Outline</button>
+    </div>
+    <div class="seg" role="group" aria-label="Particle field">
+      <button id="pOff" aria-pressed="false">No field</button>
+      <button id="pOn"  aria-pressed="true">Field</button>
+    </div>
+    <div id="rows"></div>
+    <button class="reset" id="reset">Reset</button>
+  </div>
+</div>
+
+<div id="fallback">This piece needs WebGL2.<br>Try a current Chrome, Edge, Firefox or Safari.</div>
+
+<script>
+"use strict";
+(() => {
+
+/* =======================================================================
+   1.  Matrix / vector helpers  (column-major, OpenGL convention)
+   ======================================================================= */
+const mul4 = (a, b) => {
+  const o = new Float32Array(16);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+    o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+  }
+  return o;
+};
+const persp = (fovy, asp, n, f) => {
+  const t = 1 / Math.tan(fovy / 2);
+  return new Float32Array([
+    t / asp, 0, 0, 0,
+    0, t, 0, 0,
+    0, 0, (f + n) / (n - f), -1,
+    0, 0, (2 * f * n) / (n - f), 0
+  ]);
+};
+const lookAt = (e, c, up) => {
+  let zx = e[0] - c[0], zy = e[1] - c[1], zz = e[2] - c[2];
+  let L = Math.hypot(zx, zy, zz); zx /= L; zy /= L; zz /= L;
+  let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx;
+  L = Math.hypot(xx, xy, xz) || 1; xx /= L; xy /= L; xz /= L;
+  const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+  return new Float32Array([
+    xx, yx, zx, 0,
+    xy, yy, zy, 0,
+    xz, yz, zz, 0,
+    -(xx * e[0] + xy * e[1] + xz * e[2]),
+    -(yx * e[0] + yy * e[1] + yz * e[2]),
+    -(zx * e[0] + zy * e[1] + zz * e[2]), 1
+  ]);
+};
+/* rotation about X then Y, returned as mat3 (column-major) */
+const rotYX = (ry, rx) => {
+  const cy = Math.cos(ry), sy = Math.sin(ry), cx = Math.cos(rx), sx = Math.sin(rx);
+  // R = Ry * Rx
+  return new Float32Array([
+     cy,  0, -sy,
+     sy * sx,  cx,  cy * sx,
+     sy * cx, -sx,  cy * cx
+  ]);
+};
+const m3to4 = (m) => new Float32Array([
+  m[0], m[1], m[2], 0,
+  m[3], m[4], m[5], 0,
+  m[6], m[7], m[8], 0,
+  0, 0, 0, 1
+]);
+/* transpose(mat3) * vec3  — inverse rotation applied to a point */
+const m3Tmul = (m, v) => [
+  m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
+  m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
+  m[6] * v[0] + m[7] * v[1] + m[8] * v[2]
+];
+
+/* =======================================================================
+   2.  Brandmark outline
+   Traced from the supplied artwork (1190 x 676), centred and normalised so
+   the bolt spans y = -1 .. 1.  Wound counter-clockwise.
+   ======================================================================= */
+const A = 0.2663, B = 1.0, C = 1.7604, D1 = 0.1479, D2 = 0.1568;
+const OUTLINE = [
+  [-A,   B ],   // 0  top tip
+  [-A,   D2],   // 1  inner corner (upper-left notch)
+  [-C,   D2],   // 2  left tip
+  [ A,  -B ],   // 3  bottom tip
+  [ A,  -D1],   // 4  inner corner (lower-right notch)
+  [ C,  -D1]    // 5  right tip
+];
+
+/* =======================================================================
+   3.  Geometry — extruded prism with a super-elliptic edge profile
+   Each outline edge becomes its own strip so corners stay crisp creases.
+   The *shading* normal is swept analytically in the fragment shader, which
+   is what spreads the spectrum across the full width of every wall.
+   ======================================================================= */
+function earClip(poly) {
+  const n = poly.length, idx = [...Array(n).keys()], out = [];
+  const ar = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
+  const inTri = (p, a, b, c) => {
+    const d1 = ar(p, a, b), d2 = ar(p, b, c), d3 = ar(p, c, a);
+    return !(((d1 < 0) || (d2 < 0) || (d3 < 0)) && ((d1 > 0) || (d2 > 0) || (d3 > 0)));
+  };
+  let guard = 0;
+  while (idx.length > 3 && guard++ < 500) {
+    let cut = false;
+    for (let i = 0; i < idx.length; i++) {
+      const i0 = idx[(i - 1 + idx.length) % idx.length], i1 = idx[i], i2 = idx[(i + 1) % idx.length];
+      const a = poly[i0], b = poly[i1], c = poly[i2];
+      if (ar(a, b, c) <= 1e-9) continue;                       // reflex on a CCW polygon
+      let ok = true;
+      for (const j of idx) {
+        if (j === i0 || j === i1 || j === i2) continue;
+        if (inTri(poly[j], a, b, c)) { ok = false; break; }
+      }
+      if (ok) { out.push([i0, i1, i2]); idx.splice(i, 1); cut = true; break; }
+    }
+    if (!cut) break;
+  }
+  if (idx.length === 3) out.push([idx[0], idx[1], idx[2]]);
+  return out;
+}
+
+/* inset 0 = no bevel: the walls meet the caps at a hard 90-degree edge and
+   the tips stay as points.  The band spread across each wall comes from the
+   swept shading normal, not from rounded geometry, so it survives this. */
+const GEO = { depth: 0.95, rings: 1, miterLimit: 4.4, hollow: 0, stroke: 0.15 };
+
+function buildBolt(o) {
+  const poly = OUTLINE, n = poly.length, hz = o.depth * 0.5;
+
+  /* outward unit normal per edge (CCW winding -> right of the edge) */
+  const em = [];
+  for (let i = 0; i < n; i++) {
+    const a = poly[i], b = poly[(i + 1) % n];
+    const ex = b[0] - a[0], ey = b[1] - a[1], L = Math.hypot(ex, ey);
+    em.push([ey / L, -ex / L]);
+  }
+  /* miter direction per vertex, length-compensated and clamped */
+  const mit = [];
+  for (let i = 0; i < n; i++) {
+    const p = em[(i - 1 + n) % n], q = em[i];
+    let mx = p[0] + q[0], my = p[1] + q[1];
+    const L = Math.hypot(mx, my);
+    if (L < 1e-9) { mit.push([q[0], q[1]]); continue; }
+    mx /= L; my /= L;
+    const sinHalf = mx * q[0] + my * q[1];
+    const sc = Math.min(1 / Math.max(sinHalf, 1e-3), o.miterLimit);
+    mit.push([mx * sc, my * sc]);
+  }
+  /* normalised arc length at each vertex — drives "intensity varies along the bolt" */
+  const cum = [0]; let tot = 0;
+  for (let i = 0; i < n; i++) {
+    const a = poly[i], b = poly[(i + 1) % n];
+    tot += Math.hypot(b[0] - a[0], b[1] - a[1]); cum.push(tot);
+  }
+
+  const P = [], N = [], I = [], M = [];
+  const put = (v) => { P.push(v[0], v[1], v[2]); N.push(v[3], v[4], v[5]); I.push(v[6], v[7], v[8]); M.push(v[9], v[10]); };
+
+  /* Inner boundary, used when the mark is drawn as an outline the way the
+     SLIK hero model is: a stroke following the bolt, open in the middle so
+     the field behind shows straight through.                            */
+  const INNER = poly.map((_, i) => [
+    poly[i][0] - mit[i][0] * o.stroke,
+    poly[i][1] - mit[i][1] * o.stroke
+  ]);
+
+  /* ---- walls: one strip per edge, per boundary ---- */
+  const strip = (A, B, mv, sa, sb, flip) => {
+    const vert = (u, base, sN) => [
+      base[0], base[1], hz * u,
+      mv[0], mv[1], 0,                 /* placeholder: swept in the shader */
+      1, u, sN,
+      mv[0], mv[1]
+    ];
+    for (let k = 0; k < o.rings; k++) {
+      const u0 = -1 + 2 * k / o.rings, u1 = -1 + 2 * (k + 1) / o.rings;
+      const A0 = vert(u0, A, sa), B0 = vert(u0, B, sb);
+      const A1 = vert(u1, A, sa), B1 = vert(u1, B, sb);
+      if (!flip) { put(A0); put(B0); put(B1); put(A0); put(B1); put(A1); }
+      else       { put(A0); put(B1); put(B0); put(A0); put(A1); put(B1); }
+    }
+  };
+
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const sa = cum[i] / tot, sb = cum[i + 1] / tot;
+    strip(poly[i], poly[j], em[i], sa, sb, false);
+    /* the inner wall faces into the hole, so both its normal and its
+       winding are flipped */
+    if (o.hollow) strip(INNER[i], INNER[j], [-em[i][0], -em[i][1]], sa, sb, true);
+  }
+
+  /* ---- caps ---- */
+  const capV = (pt, z, nz, sN) => put([pt[0], pt[1], z, 0, 0, nz, 0, nz, sN, 0, 0]);
+  if (o.hollow) {
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const si = cum[i] / tot, sj = cum[i + 1] / tot;
+      const ao = poly[i], bo = poly[j], ai = INNER[i], bi = INNER[j];
+      capV(ao,  hz,  1, si); capV(bo,  hz,  1, sj); capV(bi,  hz,  1, sj);
+      capV(ao,  hz,  1, si); capV(bi,  hz,  1, sj); capV(ai,  hz,  1, si);
+      capV(bi, -hz, -1, sj); capV(bo, -hz, -1, sj); capV(ao, -hz, -1, si);
+      capV(ai, -hz, -1, si); capV(bi, -hz, -1, sj); capV(ao, -hz, -1, si);
+    }
+  } else {
+    for (const [t0, t1, t2] of earClip(poly)) {
+      for (const i of [t0, t1, t2]) capV(poly[i],  hz,  1, cum[i] / tot);
+      for (const i of [t2, t1, t0]) capV(poly[i], -hz, -1, cum[i] / tot);
+    }
+  }
+
+  return {
+    pos: new Float32Array(P), nrm: new Float32Array(N),
+    info: new Float32Array(I), mdir: new Float32Array(M),
+    count: P.length / 3, hz, inner: INNER
+  };
+}
+
+/* =======================================================================
+   4.  Shaders
+   ======================================================================= */
+const QUAD_VS = `#version 300 es
+void main(){
+  vec2 p = vec2(float((gl_VertexID & 1) * 2), float(gl_VertexID & 2));
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+const BLIT_FS = `#version 300 es
+precision highp float;
+uniform sampler2D tSrc;
+uniform vec2 uRes;
+out vec4 fragColor;
+void main(){ fragColor = texture(tSrc, gl_FragCoord.xy / uRes); }`;
+
+/* ---- the ground the bolt is seen against ------------------------------
+   It needs real detail: chromatic aberration is only visible where the
+   background has structure to be split apart.                            */
+const BG_FS = `#version 300 es
+precision highp float;
+uniform vec2  uRes;
+uniform float uDark;
+uniform float uTime;
+out vec4 fragColor;
+
+float h21(vec2 p){ p = fract(p * vec2(127.11, 311.7)); p += dot(p, p + 34.23); return fract(p.x * p.y); }
+
+void main(){
+  vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
+  float r = length(p);
+
+  /* Dark ground is flat black — nothing behind the glass but the prism
+     caustics themselves.  The light ground keeps a soft falloff so there
+     is still a gradient for the glass to disperse.                     */
+  vec3 lite = mix(vec3(0.968, 0.966, 0.958), vec3(0.866, 0.870, 0.882), smoothstep(0.0, 1.15, r));
+  vec3 col  = mix(lite, vec3(0.0), uDark);
+
+  col += (h21(gl_FragCoord.xy + uTime) - 0.5) * 0.005 * (1.0 - uDark);   /* dither */
+  fragColor = vec4(col, 1.0);
+}`;
+
+const PART_VS = `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aP;
+uniform mat4 uViewProj;
+uniform mat3 uSpin;
+uniform vec2 uRes;
+uniform float uPx;
+out float vFade;
+void main(){
+  vec4 cp = uViewProj * vec4(uSpin * aP, 1.0);
+  gl_Position = cp;
+  float d = max(cp.w, 0.05);
+  float h = fract(sin(dot(aP, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+  gl_PointSize = clamp(uPx * (0.45 + 1.5 * h * h) * uRes.y / (760.0 * d), 1.0, 9.0);
+  vFade = clamp(1.35 - (d - 3.0) / 8.0, 0.10, 1.0) * (0.30 + 0.80 * h);
+}`;
+
+const PART_FS = `#version 300 es
+precision highp float;
+in float vFade;
+uniform float uDark;
+out vec4 fragColor;
+void main(){
+  float a = 1.0 - smoothstep(0.18, 0.5, length(gl_PointCoord - 0.5));
+  if (a <= 0.002) discard;
+  vec3 c = mix(vec3(0.07, 0.08, 0.10), vec3(0.95, 0.97, 1.00), uDark);
+  fragColor = vec4(c, a * vFade * mix(0.70, 1.0, uDark));
+}`;
+
+const BOLT_VS = `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNrm;
+layout(location = 2) in vec3 aInfo;   // x = wallness, y = width param u, z = arc length
+layout(location = 3) in vec2 aM;      // wall outward direction in xy (0,0 on caps)
+
+uniform mat4 uModel, uViewProj;
+
+out vec3 vW; out vec3 vL; out vec3 vI; out vec2 vM; out vec3 vGN;
+
+void main(){
+  vec4 wp = uModel * vec4(aPos, 1.0);
+  vW = wp.xyz; vL = aPos; vI = aInfo; vM = aM; vGN = aNrm;
+  gl_Position = uViewProj * wp;
+}`;
+
+const BOLT_FS = `#version 300 es
+precision highp float;
+
+in vec3 vW; in vec3 vL; in vec3 vI; in vec2 vM; in vec3 vGN;
+out vec4 fragColor;
+
+uniform sampler2D tBack;
+uniform vec2  uRes;
+uniform mat4  uModel, uViewProj;
+uniform mat3  uNrmM;
+uniform vec3  uCam, uCamL;
+uniform float uTime, uDark, uIsBack;
+uniform vec2  uPoly[6], uPolyIn[6];
+uniform float uHollow;
+uniform float uHz;
+uniform float uIor, uDisp, uAbsorb;
+uniform float uPrism, uFilter, uShine, uAmb, uSat, uSpec, uRim, uBgDist;
+uniform vec2  uDest;                       /* size of the buffer being drawn INTO */
+uniform float uIorR, uIorY, uIorG, uIorC, uIorB, uIorP;
+uniform float uRefractPower, uChroma, uSaturation, uFresnelP, uShininess, uDiffuseness;
+uniform vec3  uSlikLight;
+uniform float uNsweep, uNk, uDbg;
+uniform vec3  uL0, uL1, uL2, uLA;
+
+const int NS = 6;
+
+/* Spectral response, violet (t=0) -> red (t=1).  The loop divides by the
+   summed weight, so a flat background transmits as pure white: the model
+   itself never picks up a colour cast from the dispersion.  Only detail
+   *behind* the glass gets split.                                        */
+vec3 specW(float t){
+  /* A lens aberration axis rather than a full prism rainbow: cyan and blue
+     at one end, red through magenta at the other, and a neutral middle.
+     Green is held at the level the other two cross at, so the yellow and
+     green bands of a true spectrum never appear.                       */
+  float r = 0.28 + 1.12 * smoothstep(0.26, 0.94, t);
+  float g = 0.60 + 0.34 * exp(-pow((t - 0.16) / 0.26, 2.0))
+                 - 0.14 * smoothstep(0.55, 1.00, t);
+  float b = 0.28 + 1.12 * smoothstep(0.74, 0.06, t)
+                 + 0.85 * smoothstep(0.72, 1.00, t);
+  return vec3(r, g, b);
+}
+
+/* First boundary crossing of a ray travelling inside the extruded polygon.
+   The solid is polygon(x,y) x [-uHz, uHz], so this is exact and cheap. */
+float hitExit(vec3 p, vec3 d, out vec3 nOut){
+  float tb = 1e9; vec3 nb = vec3(0.0, 0.0, 1.0);
+  if (abs(d.z) > 1e-5){
+    float t = ((d.z > 0.0 ? uHz : -uHz) - p.z) / d.z;
+    if (t > 1e-4){ tb = t; nb = vec3(0.0, 0.0, d.z > 0.0 ? 1.0 : -1.0); }
+  }
+  for (int i = 0; i < 6; i++){
+    vec2 a = uPoly[i];
+    vec2 b = uPoly[i == 5 ? 0 : i + 1];
+    vec2 e = b - a;
+    vec2 m = normalize(vec2(e.y, -e.x));
+    float den = dot(d.xy, m);
+    if (den > 1e-5){
+      float t = dot(a - p.xy, m) / den;
+      if (t > 1e-4 && t < tb){
+        float sp = dot(p.xy + d.xy * t - a, e) / dot(e, e);
+        if (sp > -0.003 && sp < 1.003){ tb = t; nb = vec3(m, 0.0); }
+      }
+    }
+  }
+  /* an outline is a ring, so a ray inside it can also exit inwards */
+  if (uHollow > 0.5){
+    for (int i = 0; i < 6; i++){
+      vec2 a = uPolyIn[i];
+      vec2 b = uPolyIn[i == 5 ? 0 : i + 1];
+      vec2 e = b - a;
+      vec2 m = -normalize(vec2(e.y, -e.x));
+      float den = dot(d.xy, m);
+      if (den > 1e-5){
+        float t = dot(a - p.xy, m) / den;
+        if (t > 1e-4 && t < tb){
+          float sp = dot(p.xy + d.xy * t - a, e) / dot(e, e);
+          if (sp > -0.003 && sp < 1.003){ tb = t; nb = vec3(m, 0.0); }
+        }
+      }
+    }
+  }
+  nOut = nb;
+  return min(tb, 14.0);
+}
+
+/* The studio the glass stands in.  Soft-EDGED sources are what make
+   dispersion legible: a gradient in the environment gets smeared into a
+   broad band because each wavelength leaves at a slightly different
+   angle.  The hot cores on top give the fully saturated stretches, and
+   the standing wash keeps every wall carrying light rather than going
+   black on a dark ground.                                              */
+float band(vec3 d, vec3 L, float c, float w){ return smoothstep(c - w, c + w, dot(d, L)); }
+
+float env(vec3 d){
+  /* Studio: a bright ceiling over a mid wall over a darker floor.  The
+     seams between them are gradients, so they disperse into horizontal
+     runs of colour that sweep across whatever wall is facing them.    */
+  float e = uAmb * (0.14
+          + 0.26 * smoothstep(-0.34, 0.30, d.y)
+          + 0.28 * smoothstep( 0.08, 0.74, d.y));
+  /* Reflectors scattered through the room, written as three low-order
+     waves in direction space.  Their scale (~35 deg) sits just above the
+     wavelength fan, so the fan always straddles structure however a wall
+     happens to face — no stretch falls back to flat white — while
+     staying coarse enough that the 14 samples never alias into noise. */
+  e += 0.34 * (0.5 + 0.5 * sin( 6.1 * d.x + 4.3 * d.y - 5.2 * d.z + 1.1));
+  e += 0.26 * (0.5 + 0.5 * sin(-4.7 * d.x + 7.9 * d.y + 3.4 * d.z + 2.7));
+  e += 0.20 * (0.5 + 0.5 * sin( 8.3 * d.x - 3.1 * d.y + 6.6 * d.z - 0.4));
+  e += 0.17 * (0.5 + 0.5 * sin(-7.2 * d.x - 6.4 * d.y - 4.1 * d.z + 4.2));
+  /* Stacked edges at different angles: the exit fan crosses several of
+     them as it sweeps a wall, so a wall picks up a run of bands rather
+     than one hairline.                                                 */
+  e += 0.86 * band(d, uL0, 0.60, 0.14);
+  e += 0.72 * band(d, uL0, 0.90, 0.07);
+  e += 0.78 * band(d, uL1, 0.40, 0.15);
+  e += 0.62 * band(d, uL1, 0.79, 0.09);
+  e += 0.64 * band(d, uL2, 0.28, 0.16);
+  e += 0.58 * band(d, uL2, 0.72, 0.10);
+  e += 0.56 * band(d, uLA, 0.52, 0.13);
+  if (uIsBack < 0.5) {
+    e += 1.55 * pow(max(dot(d, uL0), 0.0), uShine);
+    e += 1.00 * pow(max(dot(d, uL1), 0.0), uShine * 0.75);
+  }
+  return e;
+}
+
+/* interleaved-gradient noise: well distributed, one instruction-ish */
+float ign(vec2 p){ return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+
+/* ------------------------------------------------------------------
+   Ported from the SLIK hero material (RYGCBV six-index dispersion).
+   Rather than integrating a spectrum, it samples the backdrop six times
+   through six separate indices of refraction, then rebuilds RGB from the
+   red/yellow/green/cyan/blue/purple primaries.  Repeating that with a
+   growing offset smears each primary into a streak instead of a fringe,
+   which is what gives their glass its look.                          */
+vec3 satAdj(vec3 rgb, float a){
+  const vec3 W = vec3(0.2125, 0.7154, 0.0721);
+  return mix(vec3(dot(rgb, W)), rgb, a);
+}
+
+float fresnelT(vec3 eye, vec3 nrm, float power){
+  return pow(1.0 - abs(dot(eye, nrm)), power);
+}
+
+/* their Blinn-Phong, half-vector built from the camera-to-surface eye
+   vector exactly as written on the site — the off-convention sign is
+   part of the look, so it is kept */
+float specularT(vec3 nrm, vec3 eye, vec3 light, float shininess, float diffuseness){
+  vec3 lv = normalize(-light);
+  vec3 hv = normalize(eye + lv);
+  float NdotH = dot(nrm, hv);
+  return pow(NdotH * NdotH, shininess) + max(0.0, dot(nrm, lv)) * diffuseness;
+}
+
+const int SLOOP = 6;
+
+vec3 disperse(vec2 uv, vec3 eye, vec3 nrm, int loops){
+  vec3 rR = refract(eye, nrm, 1.0 / uIorR);
+  vec3 rY = refract(eye, nrm, 1.0 / uIorY);
+  vec3 rG = refract(eye, nrm, 1.0 / uIorG);
+  vec3 rC = refract(eye, nrm, 1.0 / uIorC);
+  vec3 rB = refract(eye, nrm, 1.0 / uIorB);
+  vec3 rP = refract(eye, nrm, 1.0 / uIorP);
+
+  vec3 color = vec3(0.0);
+  for (int i = 0; i < SLOOP; i++){
+    if (i >= loops) break;
+    float slide = float(i) / float(loops) * 0.1;
+    float k = uRefractPower * uChroma;
+    float s = slide * uChroma;
+
+    float r = texture(tBack, uv + rR.xy * (k + s * 1.0)).x * 0.5;
+    vec3 sy  = texture(tBack, uv + rY.xy * (k + s * 1.0)).xyz;
+    float y = (sy.x * 2.0 + sy.y * 2.0 - sy.z) / 6.0;
+    float g = texture(tBack, uv + rG.xy * (k + s * 2.0)).y * 0.5;
+    vec3 sc_ = texture(tBack, uv + rC.xy * (k + s * 2.5)).xyz;
+    float c = (sc_.y * 2.0 + sc_.z * 2.0 - sc_.x) / 6.0;
+    float b = texture(tBack, uv + rB.xy * (k + s * 3.0)).z * 0.5;
+    vec3 sp_ = texture(tBack, uv + rP.xy * (k + s * 1.0)).xyz;
+    float pu = (sp_.z * 2.0 + sp_.x * 2.0 - sp_.y) / 6.0;
+
+    color.r += r + (2.0 * pu + 2.0 * y - c) / 3.0;
+    color.g += g + (2.0 * y  + 2.0 * c - pu) / 3.0;
+    color.b += b + (2.0 * c  + 2.0 * pu - y) / 3.0;
+
+    color = satAdj(color, uSaturation);   /* compounds per pass, as theirs does */
+  }
+  return color / float(loops);
+}
+
+float sc(float x){ const float k = 0.66; return x < k ? x : k + (1.0 - k) * (1.0 - exp(-(x - k) / (1.0 - k))); }
+
+void main(){
+  float wall = clamp(vI.x, 0.0, 1.0);
+  float u    = clamp(vI.y, -1.0, 1.0);
+
+  /* --- swept shading normal -------------------------------------------
+     The geometry keeps a crisp silhouette, but the shading normal turns
+     through the whole profile across the wall's width.  That sweep is
+     what drags the spectrum out into broad bands instead of a hairline. */
+  vec3 NL;
+  if (dot(vM, vM) > 0.25){
+    float ang = 1.5707963 * sign(u) * pow(abs(u), uNk) * uNsweep;
+    NL = normalize(vec3(vM * cos(ang), sin(ang)));
+  } else {
+    NL = normalize(vGN);
+  }
+  vec3 N = normalize(uNrmM * NL);
+  vec3 V = normalize(uCam - vW);
+  if (dot(N, V) < 0.0){ N = -N; NL = -NL; }
+  float ndv = clamp(dot(N, V), 0.0, 1.0);
+
+  vec3 VL = normalize(uCamL - vL);
+
+  /* --- intensity varies along the bolt --------------------------------- */
+  float s = vI.z;
+  float vary = clamp(0.5 + 0.36 * sin(s * 12.566 + 0.9) + 0.22 * sin(s * 29.32 + 2.4), 0.0, 1.0);
+  vary = 0.48 + 0.52 * vary;
+
+  /* --- spectral trace --------------------------------------------------- */
+  vec3 gainAcc = vec3(0.0), wsum = vec3(0.0);
+  float pathAcc = 0.0;
+
+  /* The far shell is only ever viewed through the near one, so it is
+     traced with fewer wavelengths and fewer bounces.  Dividing by the
+     accumulated weight keeps the white balance exact either way.      */
+  int ns   = uIsBack > 0.5 ? 4 : NS;
+  int segs = uIsBack > 0.5 ? 2 : 4;
+
+  /* Jitter where each sample sits inside its wavelength bin.  Where a
+     wall is compressed the fan stretches far enough that 12 fixed samples
+     posterise into visible steps; scattering them per pixel turns that
+     into fine grain instead.  Dividing by the accumulated weight keeps
+     the white balance exact whatever the offsets are.                  */
+  float jit = ign(gl_FragCoord.xy);
+
+  for (int i = 0; i < NS; i++){
+    if (i >= ns) break;
+    float t = (float(i) + jit) / float(ns);
+    vec3  w = specW(t);
+    wsum += w;
+    float ior = uIor + uDisp * (0.5 - t);
+
+    vec3 dir = refract(-VL, NL, 1.0 / ior);
+    if (dot(dir, dir) < 1e-8) dir = reflect(-VL, NL);
+
+    vec3 p = vL - NL * 3e-4;
+    float len = 0.0;
+    for (int k = 0; k < 4; k++){
+      if (k >= segs) break;
+      vec3 nn; float td = hitExit(p, dir, nn);
+      p += dir * td; len += td;
+      vec3 ex = refract(dir, -nn, ior);
+      if (dot(ex, ex) > 1e-8){ dir = ex; break; }
+      dir = reflect(dir, nn);           /* total internal reflection */
+      p += dir * 3e-4;
+    }
+
+    vec3 dW = normalize(uNrmM * dir);
+    gainAcc += w * env(dW);
+    pathAcc += len;
+  }
+
+  /* the backdrop, dispersed the SLIK way */
+  vec3 bgC = disperse(gl_FragCoord.xy / uDest, -V, N, uIsBack > 0.5 ? 2 : SLOOP);
+  vec3 gN  = gainAcc / wsum;    /* per-channel spectral radiance */
+
+  /* Split radiance into a neutral level and a mean-normalised hue.  The
+     hue is what survives however bright or dim the stretch happens to be,
+     which is what lets one control drive colour on both grounds.        */
+  float gmean = max((gN.r + gN.g + gN.b) / 3.0, 1e-5);
+  vec3  dev   = gN / gmean;
+
+  float lightGround = 1.0 - uDark;
+
+  /* A wall seen close to edge-on squeezes its whole spectral sweep into a
+     couple of pixels, and that averaging pulls the bands back towards
+     white.  Measure the compression from the screen-space derivative of
+     the width parameter and push saturation to compensate, so the mark
+     still reads in colour when it is viewed straight on.               */
+  float compress = clamp(fwidth(u) * 5.0, 0.0, 1.0) * wall;
+  float satA  = uSat * (1.0 + 1.85 * compress);
+  float filtA = 1.0 + 1.15 * compress;
+
+  /* --- wavelength-dependent transmittance: colour emerges against white */
+  float fAmt = uFilter * filtA * mix(0.22, 1.0, wall) * mix(1.0, 1.34, lightGround) * vary;
+  vec3 col = bgC * clamp(mix(vec3(1.0), dev, fAmt), 0.0, 1.0);
+
+  /* --- absorption gives the glass body weight, stops it washing out.
+     Deliberately neutral: density must not tint the model itself.    --- */
+  float path = pathAcc / float(NS);
+  col *= exp(-uAbsorb * path * mix(1.0, 1.8, lightGround));
+
+  /* --- additive prism caustic: colour emerges against black ----------- */
+  /* Knee the neutral level only, never the hue.  Without this a hot
+     stretch clips to white in all three channels and the wall reads as
+     chrome tube instead of a dispersing prism.                        */
+  float gm = gmean / (1.0 + gmean * 0.55);
+  vec3 gS = gm * clamp(mix(vec3(1.0), dev, satA), 0.0, 4.0);
+  vec3 prism = gS * uPrism * mix(0.15, 1.0, wall) * vary * mix(1.0, 0.72, lightGround);
+  col = 1.0 - (1.0 - col) * (1.0 - clamp(prism, 0.0, 1.0));
+
+  /* --- SLIK sheen: Blinn-Phong plus a white fresnel rim, added rather
+     than screened, which is what makes their edges read as a bright
+     outline.  Damped on the light ground so it cannot wash out.     --- */
+  float spec = specularT(N, -V, uSlikLight, uShininess, uDiffuseness);
+  col += spec * uSpec * mix(1.0, 0.42, lightGround) * (1.0 - 0.45 * compress);
+  float f = fresnelT(-V, N, uFresnelP);
+  col += f * uRim * mix(1.0, 0.45, lightGround);
+
+  if (uIsBack > 0.5) col = mix(bgC, col, 0.70);
+
+  if (uDbg > 0.5) {
+    /* red = wall, blue = cap, green channel = spectral spread */
+    float spread = clamp(length(dev - vec3(1.0)) * 1.6, 0.0, 1.0);
+    fragColor = vec4(wall, spread, 1.0 - wall, 1.0); return;
+  }
+
+  fragColor = vec4(sc(col.r), sc(col.g), sc(col.b), 1.0);
+}`;
+
+/* =======================================================================
+   5.  GL bootstrap
+   ======================================================================= */
+const canvas   = document.getElementById("gl");
+const fallback = document.getElementById("fallback");
+const gl = canvas.getContext("webgl2", {
+  alpha: false, antialias: true, depth: true,
+  premultipliedAlpha: false, powerPreference: "high-performance",
+  preserveDrawingBuffer: new URLSearchParams(location.search).has("cap")
+});
+if (!gl) { fallback.classList.add("show"); canvas.style.display = "none"; return; }
+
+const hasFloat = !!gl.getExtension("EXT_color_buffer_float");
+const FMT = hasFloat
+  ? { internal: gl.RGBA16F, type: gl.HALF_FLOAT }
+  : { internal: gl.RGBA8,   type: gl.UNSIGNED_BYTE };
+
+function compile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(s));
+    console.error(src.split("\n").map((l, i) => (i + 1) + "| " + l).join("\n"));
+    throw new Error("shader compile failed");
+  }
+  return s;
+}
+function program(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) {
+    const name = gl.getActiveUniform(p, i).name.replace(/\[0\]$/, "");
+    u[name] = gl.getUniformLocation(p, name);
+  }
+  return { p, u };
+}
+
+const progBG   = program(QUAD_VS, BG_FS);
+const progBlit = program(QUAD_VS, BLIT_FS);
+const progBolt = program(BOLT_VS, BOLT_FS);
+const progPart = program(PART_VS, PART_FS);
+
+/* The SLIK dispersion is a backdrop effect — it samples whatever is behind
+   the glass six times over.  Against a flat ground it has nothing to split,
+   so their hero puts a particle field back there.  This is that field. */
+const PCOUNT = 7000;
+const partVao = gl.createVertexArray();
+(() => {
+  const d = new Float32Array(PCOUNT * 3);
+  let seed = 0x9e37;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  /* Spread through the frustum rather than a slab: widening x and y with
+     depth keeps the density even in screen space, which is what makes
+     their field read as dense rather than clumped near the middle.    */
+  for (let i = 0; i < PCOUNT; i++) {
+    const z = -7.5 + rnd() * 8.6;
+    const k = (5.6 - z) / 5.6;
+    d[i * 3]     = (rnd() * 2 - 1) * 3.5 * k;
+    d[i * 3 + 1] = (rnd() * 2 - 1) * 2.3 * k;
+    d[i * 3 + 2] = z;
+  }
+  gl.bindVertexArray(partVao);
+  const b = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+})();
+const emptyVao = gl.createVertexArray();
+
+function makeFBO(w, h, withDepth) {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, FMT.internal, w, h, 0, gl.RGBA, FMT.type, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  let rb = null;
+  if (withDepth) {
+    rb = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { fb, tex, rb };
+}
+function dropFBO(f) {
+  if (!f) return;
+  gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fb);
+  if (f.rb) gl.deleteRenderbuffer(f.rb);
+}
+
+/* =======================================================================
+   6.  Mesh
+   ======================================================================= */
+const polyFlat = new Float32Array(12);
+OUTLINE.forEach((p, i) => { polyFlat[i * 2] = p[0]; polyFlat[i * 2 + 1] = p[1]; });
+const polyInFlat = new Float32Array(12);
+function syncInner() { MESH.inner.forEach((p, i) => { polyInFlat[i * 2] = p[0]; polyInFlat[i * 2 + 1] = p[1]; }); }
+
+const vao = gl.createVertexArray();
+const buf = { pos: gl.createBuffer(), nrm: gl.createBuffer(), info: gl.createBuffer(), mdir: gl.createBuffer() };
+let MESH = null;
+
+function uploadMesh() {
+  MESH = buildBolt(GEO);
+  gl.bindVertexArray(vao);
+  const bind = (b, data, loc, size) => {
+    gl.bindBuffer(gl.ARRAY_BUFFER, b);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0);
+  };
+  bind(buf.pos,  MESH.pos,  0, 3);
+  bind(buf.nrm,  MESH.nrm,  1, 3);
+  bind(buf.info, MESH.info, 2, 3);
+  bind(buf.mdir, MESH.mdir, 3, 2);
+  gl.bindVertexArray(null);
+  syncInner();
+}
+uploadMesh();
+
+
+/* =======================================================================
+   7.  Parameters
+   ======================================================================= */
+const DEFAULTS = {
+  ior: 1.47, disp: 0.44, absorb: 0.24,
+  prism: 0.09, filter: 1.65, shine: 42, amb: 0.30, sat: 4.3,
+  spec: 0.80, rim: 0.88, bgDist: 3.2,
+  refractPower: 0.16, chroma: 0.52, saturation: 1.14,
+  fresnelP: 2.8, shininess: 15, diffuseness: 0.12, iorB: 1.366,
+  particles: 1, pxSize: 3.4,
+  nsweep: 0.80, nk: 0.92, depth: 0.95, stroke: 0.15, dbg: 0
+};
+const P = { ...DEFAULTS };
+
+const nrm3 = (x, y, z) => { const L = Math.hypot(x, y, z); return [x / L, y / L, z / L]; };
+const L0 = nrm3(-0.42,  0.70,  0.58);
+const L1 = nrm3( 0.80,  0.22, -0.55);
+const L2 = nrm3( 0.30, -0.72,  0.62);
+const LA = nrm3(-0.15,  0.55,  0.82);
+
+/* =======================================================================
+   8.  Camera + spring motion
+   ======================================================================= */
+const FOV = 34 * Math.PI / 180;
+const view = {
+  ry: 0.62, rx: -0.17, dist: 1,
+  tRy: 0.62, tRx: -0.17, tDist: 1,
+  vRy: 0, vRx: 0, vD: 0,
+  driftY: 0, driftX: 0, zoom: 1, tZoom: 1
+};
+let W = 1, H = 1, DPR = 1, BW = 1, BH = 1;
+const BACK_SCALE = 0.55;   /* far shell resolution; it is always refracted */
+let fbA = null, fbB = null;
+let darkCur = 1, darkTarget = 1;
+
+function fitDistance(aspect) {
+  const t = Math.tan(FOV / 2);
+  const halfH = 1.0 * 1.16 + GEO.depth * 0.30;
+  const halfW = C * 1.06 + GEO.depth * 0.30;
+  return Math.max(halfH / t, halfW / (t * Math.max(aspect, 0.35)));
+}
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.round(canvas.clientWidth  * DPR));
+  const h = Math.max(1, Math.round(canvas.clientHeight * DPR));
+  if (w === W && h === H) return;
+  W = w; H = h; canvas.width = W; canvas.height = H;
+  BW = Math.max(1, Math.round(W * BACK_SCALE));
+  BH = Math.max(1, Math.round(H * BACK_SCALE));
+  dropFBO(fbA); dropFBO(fbB);
+  fbA = makeFBO(W, H, false);
+  fbB = makeFBO(BW, BH, true);
+}
+
+/* --- pointer ---------------------------------------------------------- */
+let dragging = false, lastX = 0, lastY = 0, idleAt = 0;
+canvas.addEventListener("pointerdown", (e) => {
+  dragging = true; lastX = e.clientX; lastY = e.clientY;
+  view.driftY = view.driftX = 0;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove", (e) => {
+  if (!dragging) return;
+  const dx = (e.clientX - lastX) / Math.max(canvas.clientHeight, 1);
+  const dy = (e.clientY - lastY) / Math.max(canvas.clientHeight, 1);
+  lastX = e.clientX; lastY = e.clientY;
+  view.tRy += dx * 3.4;
+  view.tRx = Math.max(-1.15, Math.min(1.15, view.tRx + dy * 3.4));
+  const clamp = (v, m) => Math.max(-m, Math.min(m, v));
+  view.driftY = clamp(dx * 1.7, 0.11);
+  view.driftX = clamp(dy * 1.7, 0.09);
+});
+const endDrag = () => { if (dragging) { dragging = false; idleAt = performance.now() + 1400; } };
+canvas.addEventListener("pointerup", endDrag);
+canvas.addEventListener("pointercancel", endDrag);
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  view.tZoom = Math.max(0.55, Math.min(2.1, view.tZoom * Math.exp(e.deltaY * 0.0012)));
+}, { passive: false });
+
+/* =======================================================================
+   9.  Draw
+   ======================================================================= */
+function drawFullscreen(prog, setup) {
+  gl.useProgram(prog.p);
+  gl.bindVertexArray(emptyVao);
+  setup();
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+function drawBG(t) {
+  drawFullscreen(progBG, () => {
+    gl.uniform2f(progBG.u.uRes, W, H);
+    gl.uniform1f(progBG.u.uDark, darkCur);
+    gl.uniform1f(progBG.u.uTime, t);
+  });
+}
+function blit(tex, w, h) {
+  drawFullscreen(progBlit, () => {
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(progBlit.u.tSrc, 0);
+    gl.uniform2f(progBlit.u.uRes, w, h);
+  });
+}
+
+function drawParticles(t) {
+  if (!P.particles) return;
+  gl.useProgram(progPart.p);
+  gl.bindVertexArray(partVao);
+  gl.uniformMatrix4fv(progPart.u.uViewProj, false, viewProj);
+  gl.uniformMatrix3fv(progPart.u.uSpin, false, rotYX(t * 0.021, Math.sin(t * 0.013) * 0.16));
+  gl.uniform2f(progPart.u.uRes, W, H);
+  gl.uniform1f(progPart.u.uPx, P.pxSize);
+  gl.uniform1f(progPart.u.uDark, darkCur);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.drawArrays(gl.POINTS, 0, PCOUNT);
+  gl.disable(gl.BLEND);
+}
+
+const camPos = [0, 0, 0];
+let model4 = null, rot3 = null, viewProj = null;
+
+function drawBolt(srcTex, isBack, t) {
+  const u = progBolt.u;
+  gl.useProgram(progBolt.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, srcTex);
+  gl.uniform1i(u.tBack, 0);
+  gl.uniform2f(u.uRes, W, H);
+  gl.uniformMatrix4fv(u.uModel, false, model4);
+  gl.uniformMatrix4fv(u.uViewProj, false, viewProj);
+  gl.uniformMatrix3fv(u.uNrmM, false, rot3);
+  gl.uniform3fv(u.uCam, camPos);
+  gl.uniform3fv(u.uCamL, m3Tmul(rot3, camPos));
+  gl.uniform1f(u.uTime, t);
+  gl.uniform1f(u.uDark, darkCur);
+  gl.uniform1f(u.uIsBack, isBack);
+  gl.uniform2fv(u.uPoly, polyFlat);
+  gl.uniform2fv(u.uPolyIn, polyInFlat);
+  gl.uniform1f(u.uHollow, GEO.hollow);
+  gl.uniform1f(u.uHz, MESH.hz);
+  gl.uniform1f(u.uIor, P.ior);
+  gl.uniform1f(u.uDisp, P.disp);
+  gl.uniform1f(u.uAbsorb, P.absorb);
+  gl.uniform1f(u.uPrism, P.prism);
+  gl.uniform1f(u.uFilter, P.filter);
+  gl.uniform1f(u.uShine, P.shine);
+  gl.uniform1f(u.uAmb, P.amb);
+  gl.uniform1f(u.uSat, P.sat);
+  gl.uniform1f(u.uSpec, P.spec);
+  gl.uniform1f(u.uRim, P.rim);
+  gl.uniform2f(u.uDest, isBack ? BW : W, isBack ? BH : H);
+  gl.uniform1f(u.uIorR, 1.15); gl.uniform1f(u.uIorY, 1.16); gl.uniform1f(u.uIorG, 1.18);
+  gl.uniform1f(u.uIorC, 1.22); gl.uniform1f(u.uIorB, P.iorB); gl.uniform1f(u.uIorP, 1.22);
+  gl.uniform1f(u.uRefractPower, P.refractPower);
+  gl.uniform1f(u.uChroma, P.chroma);
+  gl.uniform1f(u.uSaturation, P.saturation);
+  gl.uniform1f(u.uFresnelP, P.fresnelP);
+  gl.uniform1f(u.uShininess, P.shininess);
+  gl.uniform1f(u.uDiffuseness, P.diffuseness);
+  gl.uniform3f(u.uSlikLight, -1.8, -0.5, -5.0);
+  gl.uniform1f(u.uBgDist, P.bgDist);
+  gl.uniform1f(u.uNsweep, P.nsweep);
+  gl.uniform1f(u.uNk, P.nk);
+  gl.uniform1f(u.uDbg, P.dbg || 0);
+  gl.uniform3fv(u.uL0, L0); gl.uniform3fv(u.uL1, L1);
+  gl.uniform3fv(u.uL2, L2); gl.uniform3fv(u.uLA, LA);
+  gl.bindVertexArray(vao);
+  gl.drawArrays(gl.TRIANGLES, 0, MESH.count);
+}
+
+/* =======================================================================
+   10.  Loop
+   ======================================================================= */
+const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+let prev = performance.now();
+let intro = 0;
+view.dist = view.tDist = fitDistance(16 / 9);
+if (!REDUCED) { view.ry = view.tRy - 0.85; view.zoom = 1.75; }
+
+function renderFrame(now) {
+  const dt = Math.min((now - prev) / 1000, 1 / 30);
+  prev = now;
+  const t = now * 0.001;
+  intro = Math.min(intro + dt, 4);
+
+  resize();
+  const aspect = W / H;
+
+  /* idle drift + release inertia */
+  if (!dragging) {
+    view.tRy += view.driftY; view.driftY *= 0.952;
+    view.tRx += view.driftX; view.driftX *= 0.952;
+    if (now > idleAt && !REDUCED) view.tRy += dt * 0.085;
+    view.tRx += (-0.17 - view.tRx) * dt * 0.55;
+  }
+
+  /* spring: stiffness 300, damping 30, mass 1 */
+  const K = 300, Cd = 30;
+  const step = (cur, tgt, vel) => {
+    const a = K * (tgt - cur) - Cd * vel;
+    vel += a * dt;
+    return [cur + vel * dt, vel];
+  };
+  [view.ry, view.vRy] = step(view.ry, view.tRy, view.vRy);
+  [view.rx, view.vRx] = step(view.rx, view.tRx, view.vRx);
+  [view.zoom, view.vD] = step(view.zoom, view.tZoom, view.vD);
+  darkCur += (darkTarget - darkCur) * Math.min(1, dt * 5.5);
+
+  const dist = fitDistance(aspect) * view.zoom;
+  camPos[0] = 0; camPos[1] = 0; camPos[2] = dist;
+
+  rot3   = rotYX(view.ry, view.rx);
+  model4 = m3to4(rot3);
+  viewProj = mul4(persp(FOV, aspect, 0.1, 60), lookAt(camPos, [0, 0, 0], [0, 1, 0]));
+
+  /* pass 1 — ground only */
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbA.fb);
+  gl.viewport(0, 0, W, H);
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
+  drawBG(t);
+  drawParticles(t);
+
+  /* pass 2 — ground + far shell, at reduced resolution */
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbB.fb);
+  gl.viewport(0, 0, BW, BH);
+  blit(fbA.tex, BW, BH);
+  gl.clear(gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.FRONT);
+  drawBolt(fbA.tex, 1, t);
+
+  /* pass 3 — near shell to screen (it refracts ground *and* far shell).
+     The visible ground is blitted at full resolution so it stays sharp;
+     only the refraction source is the reduced-resolution buffer.       */
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, W, H);
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  blit(fbA.tex, W, H);
+  gl.clear(gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
+  drawBolt(fbB.tex, 0, t);
+
+}
+function frame(now) { renderFrame(now); requestAnimationFrame(frame); }
+requestAnimationFrame(frame);
+
+/* =======================================================================
+   11.  UI
+   ======================================================================= */
+const SPEC = [
+  ["#", "Refraction"],
+  ["refractPower", "Refract",     0.00, 0.60, 0.005],
+  ["chroma",       "Aberration",  0.00, 1.60, 0.01 ],
+  ["iorB",         "Blue index",  1.05, 1.90, 0.002],
+  ["saturation",   "Saturation",  0.50, 2.00, 0.01 ],
+  ["rim",          "Fresnel rim", 0.00, 2.00, 0.01 ],
+  ["spec",         "Sheen",       0.00, 2.00, 0.01 ],
+  ["pxSize",       "Field size",  1.00, 8.00, 0.10 ],
+  ["stroke",       "Stroke",      0.06, 0.40, 0.005],
+  ["#", "Prism"],
+  ["prism",  "Caustic",     0.00, 2.50, 0.01 ],
+  ["filter", "Filter",      0.00, 3.00, 0.01 ],
+  ["sat",    "Band colour", 1.00, 5.00, 0.01 ],
+  ["disp",   "Dispersion",  0.02, 0.50, 0.005],
+  ["nsweep", "Wall sweep",  0.30, 1.00, 0.01 ],
+  ["depth",  "Depth",       0.25, 1.10, 0.01 ],
+  ["absorb", "Density",     0.00, 1.40, 0.01 ]
+];
+const rows = document.getElementById("rows");
+const inputs = {};
+for (const [key, label, min, max, stepv] of SPEC) {
+  if (key === "#") {
+    const h = document.createElement("div");
+    h.className = "grp"; h.textContent = label; rows.appendChild(h);
+    continue;
+  }
+  const row = document.createElement("div");
+  row.className = "row";
+  row.innerHTML = '<div class="top"><span>' + label + '</span><span data-v></span></div>';
+  const inp = document.createElement("input");
+  inp.type = "range"; inp.min = min; inp.max = max; inp.step = stepv;
+  inp.value = P[key] !== undefined ? P[key] : GEO[key];
+  const out = row.querySelector("[data-v]");
+  const show = () => { out.textContent = (+inp.value).toFixed(stepv >= 1 ? 0 : 2); };
+  inp.addEventListener("input", () => {
+    const v = +inp.value;
+    if (key === "depth")       { GEO.depth = v;  uploadMesh(); }
+    else if (key === "stroke") { GEO.stroke = v; uploadMesh(); }
+    else                       { P[key] = v; }
+    show();
+  });
+  show();
+  row.appendChild(inp); rows.appendChild(row);
+  inputs[key] = { inp, show };
+}
+document.getElementById("reset").addEventListener("click", () => {
+  Object.assign(P, DEFAULTS);
+  GEO.depth = DEFAULTS.depth; GEO.stroke = DEFAULTS.stroke; uploadMesh();
+  for (const [key] of SPEC) {
+    if (key === "#") continue;
+    inputs[key].inp.value = key === "depth" ? GEO.depth : (key === "stroke" ? GEO.stroke : P[key]);
+    inputs[key].show();
+  }
+});
+
+const bLight = document.getElementById("gLight"), bDark = document.getElementById("gDark");
+function setGround(dark) {
+  darkTarget = dark ? 1 : 0;
+  document.documentElement.dataset.ground = dark ? "dark" : "light";
+  bDark.setAttribute("aria-pressed", dark ? "true" : "false");
+  bLight.setAttribute("aria-pressed", dark ? "false" : "true");
+}
+bLight.addEventListener("click", () => setGround(false));
+bDark.addEventListener("click", () => setGround(true));
+
+/* Open on whichever ground the viewer is already reading in, then let
+   them flip it — the mark is built to hold on either. */
+const prefersDark = !window.matchMedia("(prefers-color-scheme: light)").matches;
+setGround(prefersDark);
+darkCur = prefersDark ? 1 : 0;
+
+const bSolid = document.getElementById("fSolid"), bOutline = document.getElementById("fOutline");
+function setForm(outline) {
+  GEO.hollow = outline ? 1 : 0;
+  bOutline.setAttribute("aria-pressed", outline ? "true" : "false");
+  bSolid.setAttribute("aria-pressed", outline ? "false" : "true");
+  uploadMesh();
+}
+bSolid.addEventListener("click", () => setForm(false));
+bOutline.addEventListener("click", () => setForm(true));
+
+const bPOff = document.getElementById("pOff"), bPOn = document.getElementById("pOn");
+function setField(on) {
+  P.particles = on ? 1 : 0;
+  bPOn.setAttribute("aria-pressed", on ? "true" : "false");
+  bPOff.setAttribute("aria-pressed", on ? "false" : "true");
+}
+bPOff.addEventListener("click", () => setField(false));
+bPOn.addEventListener("click", () => setField(true));
+setField(true);
+
+const panel = document.getElementById("panel");
+const phead = document.getElementById("phead");
+phead.addEventListener("click", () => {
+  const open = panel.dataset.open === "1" ? "0" : "1";
+  panel.dataset.open = open;
+  phead.setAttribute("aria-expanded", open === "1" ? "true" : "false");
+});
+
+/* hook for automated stills */
+window.__bolt = {
+  P, GEO, view,
+  setGround, setField, setForm,
+  pose(ry, rx, zoom) {
+    view.tRy = view.ry = ry; view.tRx = view.rx = rx;
+    view.tZoom = view.zoom = (zoom === undefined ? 1 : zoom);
+    view.vRy = view.vRx = view.vD = view.driftY = view.driftX = 0;
+    idleAt = performance.now() + 1e9;
+  },
+  rebuild: uploadMesh,
+  tick(ms) { prev = (ms === undefined ? performance.now() : ms) - 16; renderFrame(prev + 16); },
+  shot() { return canvas.toDataURL("image/png"); }
+};
+
+})();
+</script>
