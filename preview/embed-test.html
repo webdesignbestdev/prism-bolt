@@ -42,6 +42,11 @@
 
     <section class="band dark"><p>End.</p></section>
 
-    <script src="/dist/prism-bolt.min.js"></script>
+    <!-- cache-busted so a rebuild is picked up without a hard reload -->
+    <script>
+      var s = document.createElement('script');
+      s.src = '/dist/prism-bolt.min.js?v=' + Date.now();
+      document.body.appendChild(s);
+    </script>
   </body>
 </html>

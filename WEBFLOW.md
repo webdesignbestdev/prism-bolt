@@ -83,8 +83,9 @@ these custom attributes:
 | ------------------ | ---------- | ----------------------------------------- |
 | `data-prism-bolt`  | *(empty)*  | Marks it. Required.                       |
 | `data-background`  | `#F5F5F5`  | The colour behind it. **Required** — see §4 |
-| `data-to-x`        | `24`       | End tilt, degrees                         |
-| `data-to-y`        | `66`       | End turn, degrees                         |
+| `data-to-x`        | `15`       | End tilt, degrees                         |
+| `data-to-y`        | `-35`      | End turn, degrees. Negative turns the right side toward you |
+| `data-scale`       | `1`        | Optional. Multiplies the automatic fit    |
 
 That's the whole integration. No Webflow Interaction needed — the bolt reads the
 scroll position itself, which also means Webflow's smooth scroll, Lenis, or
@@ -125,10 +126,17 @@ Open http://localhost:5179/preview/ — both variants, with sliders for the star
 and end angles. It prints the exact attributes to paste into Webflow, with a
 copy button. Nothing needs rebuilding; you are just reading off numbers.
 
-Default is a quarter turn: starts dead square, ends at `24°` tilt / `66°` turn —
-a three-quarter view, which is where the walls and the edge colour read
-strongest. Motion is eased at both ends, so it settles rather than arriving at
-speed.
+Default is a quarter turn: starts dead square, ends at `15°` tilt / `-35°` turn.
+The negative turn swings the mark's right side toward you, which is the
+direction that shows the notch wall and keeps the arms readable. Motion is eased
+at both ends, so it settles rather than arriving at speed.
+
+**Size is automatic.** The mark is fitted to its canvas rather than set to a
+fixed size, so a tall narrow div and a wide short one get the same proportion of
+mark to margin. The fit is measured against the pose it will actually animate
+through — turning the mark swings its own depth into the silhouette, so fitting
+the flat outline alone would let it graze the edge part way through the scroll.
+To deviate, `data-scale="1.1"` multiplies the fit; it is not an absolute size.
 
 ---
 

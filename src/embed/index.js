@@ -35,7 +35,7 @@ function readOptions(el, overrides = {}) {
   const d = el.dataset;
   return {
     background: d.background || '#F5F5F5',
-    scale: num(d.scale, 1),
+    scale: num(d.scale, 1),   // multiplies the automatic fit, not an absolute size
     // degrees in the markup, radians internally -- nobody should have to type
     // radians into a Webflow field
     from: {
@@ -43,8 +43,8 @@ function readOptions(el, overrides = {}) {
       y: num(d.fromY, 0) * DEG,
     },
     to: {
-      x: num(d.toX, 24) * DEG,
-      y: num(d.toY, 66) * DEG,
+      x: num(d.toX, 15) * DEG,
+      y: num(d.toY, -35) * DEG,
     },
     idle: d.idle === 'true',
     ease: num(d.ease, 1),
@@ -144,6 +144,8 @@ export function mount(el, overrides = {}) {
       return {
         x: +(p.x / DEG).toFixed(2),
         y: +(p.y / DEG).toFixed(2),
+        scale: +p.scale.toFixed(3),
+        canvas: p.canvas,
         progress: +(manual === null ? trackProgress(el, track) : manual).toFixed(4),
         driver: manual === null ? (track ? 'track' : 'viewport') : 'manual',
       };

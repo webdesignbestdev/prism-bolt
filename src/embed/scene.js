@@ -106,9 +106,41 @@ export function createScene(canvas, opts) {
   });
 
   const bolt = new THREE.Mesh(geometry, material);
-  bolt.scale.setScalar(opts.scale);
   bolt.frustumCulled = false;
   scene.add(bolt);
+
+  /* How much of the canvas the mark fills.  Fitting to the frustum rather than
+     hard-coding a scale means a tall narrow div and a wide short one both get
+     the same proportion of mark to margin, instead of the mark shrinking to a
+     speck on one and overflowing the other.
+
+     The fit is measured against the square pose, which is the widest the
+     silhouette ever gets -- turning it only foreshortens -- so nothing clips
+     part way through the scroll. */
+  geometry.computeBoundingBox();
+  const bb = geometry.boundingBox;
+  const markW = bb.max.x - bb.min.x;
+  const markH = bb.max.y - bb.min.y;
+  const markD = bb.max.z - bb.min.z;
+  const MARGIN = 0.86;
+
+  /* Turning the mark foreshortens it, but it also swings the mark's own depth
+     into the silhouette -- a 15 degree tilt adds depth * sin(15) to the height.
+     Fitting to the flat outline alone therefore under-measures the pose it is
+     about to animate through, and on a 16:9 canvas that ate all but 5% of the
+     vertical margin.  Sampling the travel and taking the largest extent on each
+     axis keeps the fit honest for whatever angles get dialled in. */
+  function fittedExtent() {
+    const { from, to } = opts;
+    let w = 0, h = 0;
+    for (const t of [0, 0.5, 1]) {
+      const rx = Math.abs(from.x + (to.x - from.x) * t);
+      const ry = Math.abs(from.y + (to.y - from.y) * t);
+      w = Math.max(w, markW * Math.cos(ry) + markD * Math.sin(ry));
+      h = Math.max(h, markH * Math.cos(rx) + markD * Math.sin(rx));
+    }
+    return { w, h };
+  }
 
   let mainTarget = null;
   let backTarget = null;
@@ -126,6 +158,12 @@ export function createScene(canvas, opts) {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+
+    const visibleH = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.position.z;
+    const visibleW = visibleH * camera.aspect;
+    const ext = fittedExtent();
+    const fit = Math.min(visibleW / ext.w, visibleH / ext.h) * MARGIN;
+    bolt.scale.setScalar(fit * opts.scale);
 
     const pw = Math.max(1, Math.floor(w * dpr));
     const ph = Math.max(1, Math.floor(h * dpr));
@@ -227,7 +265,10 @@ export function createScene(canvas, opts) {
     renderer.dispose();
   }
 
-  const getPose = () => ({ x: bolt.rotation.x, y: bolt.rotation.y, z: bolt.rotation.z });
+  const getPose = () => ({
+    x: bolt.rotation.x, y: bolt.rotation.y, z: bolt.rotation.z,
+    scale: bolt.scale.x, canvas: [width, height],
+  });
 
   return { renderer, scene, camera, bolt, resize, render, setBackground, setUniform, getPose, dispose };
 }
