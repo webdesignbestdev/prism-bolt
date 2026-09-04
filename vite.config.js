@@ -26,6 +26,10 @@ function shotSaver() {
 }
 
 export default defineConfig({
+  /* Not dist/.  dist/ holds the committed embed bundle that jsDelivr serves,
+     and vite empties its outDir on every build -- so a plain `npm run build`
+     here would quietly delete the file the live site loads. */
+  build: { outDir: 'dist-app' },
   plugins: [react(), shotSaver()],
   server: { port: 5178, strictPort: true },
 });
