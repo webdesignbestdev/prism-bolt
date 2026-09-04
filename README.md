@@ -11,6 +11,23 @@ npm install && npm run dev
 
 Drag to orbit, scroll to zoom. `h` panel · `g` ground · `s` still to `./shots`.
 
+## Two builds
+
+| | |
+| --- | --- |
+| `npm run dev` | The tuning app. React Three Fiber, leva panel, orbit controls. Never ships. |
+| `npm run build:embed` | `dist/prism-bolt.min.js` — vanilla three.js, 121 KB gzipped, one `<script>` tag. |
+| `npm run preview:embed` | The embed running in a mock Webflow page, with sliders for the scroll end pose. |
+| `npm run check:geometry` | Face-winding test. See "Wall winding is silently fatal". |
+
+**[WEBFLOW.md](WEBFLOW.md) is the integration guide.** There is no model file to
+host — the geometry is built in code and the glass is a shader, so what ships is
+one JS file and one empty div.
+
+Both builds import `src/lib/params.js`, so the values tuned in the app are the
+values that ship, and `roomFromBackground()` derives the glass's room from a
+single page colour in both. Nothing is duplicated between them.
+
 ## How it works
 
 There is no `MeshPhysicalMaterial` and no post-processing pass. Everything is
