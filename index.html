@@ -1,18 +1,106 @@
 <!doctype html>
+<!--
+  Glass Bolt — the brandmark as clear prismatic glass. This page is the tuner;
+  embed.js is what goes on the website (see WEBFLOW.md).
+  Run `node serve.mjs`, then open http://localhost:5190
+  Keys: b flips between the white and black versions, h hides the panel,
+  + and - zoom, 0 resets. Scroll or pinch to zoom towards the cursor,
+  drag to pan once zoomed in, double-click to reset.
+-->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Prism Bolt</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
-    />
+    <title>Glass Bolt</title>
+    <style>
+      /* box sizing */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      /* variables */
+      :root {
+        --page-background: #ffffff; /* the page behind the mark; the canvas itself is transparent */
+      }
+
+      /* resets */
+      body {
+        margin: 0;
+      }
+
+      /* body */
+      body {
+        min-height: 100vh;
+        background-color: var(--page-background);
+        overflow: hidden;
+      }
+
+      /* layout */
+      .bolt_wrap {
+        position: fixed;
+        inset: 0;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <div class="bolt_wrap" role="img" aria-label="Glass lightning bolt"></div>
+
+    <script type="module">
+      import GUI from 'https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/lil-gui.module.min.js';
+      import { createGlassBolt } from './glass-bolt.js';
+
+      const bolt = createGlassBolt(document.querySelector('.bolt_wrap'), { zoomable: true, preset: 'white' });
+      window.glassBolt = bolt; // for poking at uniforms from the console
+
+      // with reduced motion the mark holds still at an angle that shows its depth
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        bolt.options.spin = 0;
+        bolt.setAngle(0.55);
+      }
+
+      const u = bolt.uniforms;
+      const gui = new GUI({ title: 'Glass Bolt' });
+
+      gui.add(u.uRefractPower, 'value', 0, 1, 0.001).name('uRefractPower');
+      gui.add(u.uChromaticAberration, 'value', 0, 2, 0.001).name('uChromaticAberration');
+      gui.add(u.uSaturation, 'value', 0, 3, 0.01).name('uSaturation');
+      gui.add(u.uFresnelPower, 'value', 0.5, 16, 0.01).name('uFresnelPower');
+      gui.add(u.uShininess, 'value', 1, 200, 1).name('uShininess');
+      gui.add(u.uDiffuseness, 'value', 0, 2, 0.001).name('uDiffuseness');
+      gui.add(u.uOpacity, 'value', 0, 1, 0.01).name('uOpacity');
+
+      const light = gui.addFolder('uLight');
+      light.add(u.uLight.value, 'x', -2, 2, 0.01);
+      light.add(u.uLight.value, 'y', -2, 2, 0.01);
+      light.add(u.uLight.value, 'z', -2, 2, 0.01);
+
+      // switching the background also switches to that version's settings,
+      // so this page shows exactly what each Webflow embed will look like
+      const PAGE = { white: '#ffffff', black: '#000000' };
+      const page = { background: 'white' };
+      function showVersion(version) {
+        page.background = version;
+        document.documentElement.style.setProperty('--page-background', PAGE[version]);
+        bolt.applyPreset(version);
+        gui.controllersRecursive().forEach((c) => c.updateDisplay());
+      }
+
+      const view = gui.addFolder('View');
+      view.add(page, 'background', { White: 'white', Black: 'black' }).onChange(showVersion);
+      view.add(bolt.options, 'spin', 0, 1.5, 0.01).name('spin (rad/s)');
+      view.add(bolt, 'zoom', bolt.options.minZoom, bolt.options.maxZoom, 0.01).listen();
+
+      // b flips between the versions, h hides the panel, + - 0 zoom
+      let panel = true;
+      window.addEventListener('keydown', (e) => {
+        if (e.key === '+' || e.key === '=') bolt.setZoom(bolt.zoom * 1.25);
+        if (e.key === '-' || e.key === '_') bolt.setZoom(bolt.zoom / 1.25);
+        if (e.key === '0') bolt.resetZoom();
+        if (e.key === 'b') showVersion(page.background === 'white' ? 'black' : 'white');
+        if (e.key === 'h') gui.show((panel = !panel));
+      });
+    </script>
   </body>
 </html>

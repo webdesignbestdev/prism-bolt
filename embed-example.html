@@ -1,0 +1,63 @@
+<!doctype html>
+<!--
+  The Webflow setup in plain HTML: a white section and a black section, each
+  with one mark, loaded through embed.js exactly as the live site loads it.
+  Run `node serve.mjs`, then open http://localhost:5190/embed-example.html
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Glass Bolt · embed example</title>
+    <style>
+      /* box sizing */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      /* variables */
+      :root {
+        --section-height: 100vh; /* each section fills the screen */
+        --bolt-height: 70vh; /*    the mark's box; it fits itself inside */
+      }
+
+      /* resets */
+      body {
+        margin: 0;
+      }
+
+      /* layout */
+      .section_bolt {
+        display: flex;
+        align-items: center;
+        min-height: var(--section-height);
+      }
+
+      .section_bolt.is-white {
+        background-color: #ffffff;
+      }
+
+      .section_bolt.is-black {
+        background-color: #000000;
+      }
+
+      .bolt_wrap {
+        width: 100%;
+        height: var(--bolt-height);
+      }
+    </style>
+  </head>
+  <body>
+    <section class="section_bolt is-white">
+      <div class="bolt_wrap" data-glass-bolt="white" role="img" aria-label="Glass lightning bolt"></div>
+    </section>
+
+    <section class="section_bolt is-black">
+      <div class="bolt_wrap" data-glass-bolt="black" role="img" aria-label="Glass lightning bolt"></div>
+    </section>
+
+    <script type="module" src="./embed.js"></script>
+  </body>
+</html>
