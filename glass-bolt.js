@@ -28,15 +28,15 @@ export const DEFAULTS = {
   uShininess: 160, //            Blinn-Phong exponent; the near-face streak runs uStreak times sharper
   uDiffuseness: 0.2, //          diffuse light on the far walls, which is what keeps them visible
   uLight: [1.0, 0.25, 0.15], //  direction towards the light: right of the mark, a little above and in front
-  uOpacity: 0.07, //             how much the glass hides what is behind it: 0 perfectly clear, 1 solid
+  uOpacity: 0.13, //             how much the glass hides what is behind it: 0 perfectly clear, 1 solid
 };
 
 /* The two versions, named for the page they sit on. Each is DEFAULTS with
    these values on top; everything not listed is shared. uPage is the page
    colour, which the glass needs to fringe a backdrop edge against it. */
 export const PRESETS = {
-  white: { uOpacity: 0.07, uPage: [1, 1, 1] },
-  black: { uOpacity: 0.13, uPage: [0, 0, 0] },
+  white: { uOpacity: 0.13, uPage: [1, 1, 1] },
+  black: { uOpacity: 0.07, uPage: [0, 0, 0] },
 };
 
 /* The rest of the look. Not in the panel, but every one is a uniform. */

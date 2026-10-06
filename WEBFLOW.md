@@ -9,8 +9,8 @@ The two versions are named for the page they sit on:
 
 | Version | Use it on | Glass opacity |
 | --- | --- | --- |
-| `white` | white or light sections | 0.07 |
-| `black` | black or dark sections | 0.13 |
+| `white` | white or light sections | 0.13 |
+| `black` | black or dark sections | 0.07 |
 
 Everything else about the look is identical: refraction, dispersion, light, spin and framing. The canvas itself is transparent, so the section's own background shows through the glass.
 
@@ -21,12 +21,12 @@ Everything else about the look is identical: refraction, dispersion, light, spin
 Go to **Site settings → Custom code → Footer code** and paste:
 
 ```html
-<script type="module" src="https://cdn.jsdelivr.net/gh/webdesignbestdev/prism-bolt@v2.1.0/embed.js"></script>
+<script type="module" src="https://cdn.jsdelivr.net/gh/webdesignbestdev/prism-bolt@v2.1.1/embed.js"></script>
 ```
 
 Save. If the bolt only appears on one page, put the same line in that page's settings instead: the gear icon on the page in the Pages panel, then **Custom code → Before `</body>` tag**.
 
-`@v2.1.0` pins the version. The file at that URL never changes, so nothing updates on the live site until you change that number yourself.
+`@v2.1.1` pins the version. The file at that URL never changes, so nothing updates on the live site until you change that number yourself.
 
 > Webflow runs custom code on the published site only, not in the Designer canvas. In the Designer the div stays empty. Publish to your `.webflow.io` staging domain to see the bolt.
 
@@ -66,7 +66,7 @@ Add any of these custom attributes next to `data-glass-bolt`. Each overrides tha
 
 | Attribute | Default | What it does |
 | --- | --- | --- |
-| `data-opacity` | `0.07` white / `0.13` black | How much the glass hides what is behind it. `0` is perfectly clear and `1` is solid grey. |
+| `data-opacity` | `0.13` white / `0.07` black | How much the glass hides what is behind it. `0` is perfectly clear and `1` is solid grey. |
 | `data-spin` | `0.25` | Rotation speed in radians per second. `0` holds it still. |
 | `data-zoom` | `0.79` | Framing. Lower shows more margin round the mark, higher fills the box. |
 | `data-zoomable` | off | Set to `true` to let visitors scroll or pinch to zoom and drag to pan. Off by default because it captures the page's scroll while the cursor is over the mark. |
@@ -83,7 +83,7 @@ Example: a still bolt that fills more of its box gets `data-spin = 0` and `data-
 - **No WebGL.** On the rare browser without it, the div stays empty and the rest of the page is unaffected.
 - **Performance.** On an Intel HD 630 one full-screen mark renders in about 10 ms a frame. A smaller div is a cheaper render.
 - **The old embed.** `prism-bolt.min.js` from the earlier build still loads from `@v1.0.0`. If the site still has that script tag, remove it when you add this one.
-- **Distortion.** The glass bends whatever is drawn behind it inside its own canvas (see *Distortion* in the README). It cannot see the Webflow page itself: text, images and other elements under the mark are HTML, and the browser keeps that out of WebGL's reach. On a plain white or black section there is nothing to bend, so the mark looks the same as in v2.0.0.
+- **Distortion.** The glass bends whatever is drawn behind it inside its own canvas (see *Distortion* in the README). It cannot see the Webflow page itself: text, images and other elements under the mark are HTML, and the browser keeps that out of WebGL's reach. On a plain white or black section there is nothing to bend, so the distortion adds nothing there.
 
 ## 6. Driving it from your own code
 
@@ -107,14 +107,14 @@ If a mark is added to the page after load, for example in CMS content loaded lat
 3. Commit and push, then tag the new version:
 
    ```bash
-   git tag v2.1.1
+   git tag v2.1.2
    ```
 
    ```bash
-   git push origin v2.1.1
+   git push origin v2.1.2
    ```
 
-4. In Webflow, change `@v2.1.0` to `@v2.1.1` in the footer script and publish.
+4. In Webflow, change `@v2.1.1` to `@v2.1.2` in the footer script and publish.
 
 ## 8. If nothing shows
 

@@ -54,11 +54,11 @@ bolt.backdrop.add(bar);
 
 `uDistortion` (0.75) sets how far the glass shifts it. `uFringe` (0.05) sets how far its colours split.
 
-The HTML page under the canvas is out of reach: WebGL cannot see it. Over a plain section there is nothing to bend, so with an empty backdrop the mark looks exactly as it did in v2.0.0, and the backdrop costs nothing.
+The HTML page under the canvas is out of reach: WebGL cannot see it. Over a plain section there is nothing to bend. With an empty backdrop the distortion adds nothing and costs nothing.
 
 ## The two versions
 
-`PRESETS` in `glass-bolt.js` defines `white` and `black`, named for the page the mark sits on. They differ only in `uOpacity` (0.07 and 0.13); everything else is shared `DEFAULTS`.
+`PRESETS` in `glass-bolt.js` defines `white` and `black`, named for the page the mark sits on. They differ only in `uOpacity` (0.13 and 0.07); everything else is shared `DEFAULTS`.
 
 ## Changing the look
 
