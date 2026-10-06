@@ -12,9 +12,11 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.m
      1. BackSide  -> render target   the far walls, lit from inside
      2. FrontSide -> screen          the near faces refract that capture
 
-   Nothing else is in the scene: no backdrop, no environment, no background.
-   The only light the near faces can bend is the light on the far walls, so
-   every colour on screen is that light pulled apart by the dispersion loop.
+   There is no environment. The only light the near faces bend is the light
+   on the far walls, plus whatever sits on the backdrop layer behind the mark,
+   which is drawn into a target of its own first and refracted the same way.
+   WebGL cannot see the HTML page under the canvas, so the backdrop layer is
+   the only thing the glass can distort.
 --------------------------------------------------------------------------- */
 
 /* Controls exposed in the panel, at their tuned values. */
@@ -30,10 +32,11 @@ export const DEFAULTS = {
 };
 
 /* The two versions, named for the page they sit on. Each is DEFAULTS with
-   these values on top; everything not listed is shared. */
+   these values on top; everything not listed is shared. uPage is the page
+   colour, which the glass needs to fringe a backdrop edge against it. */
 export const PRESETS = {
-  white: { uOpacity: 0.07 },
-  black: { uOpacity: 0.13 },
+  white: { uOpacity: 0.07, uPage: [1, 1, 1] },
+  black: { uOpacity: 0.13, uPage: [0, 0, 0] },
 };
 
 /* The rest of the look. Not in the panel, but every one is a uniform. */
@@ -52,6 +55,8 @@ export const LOOK = {
   uIorViolet: 1.33, //   and at the violet end
   uEdgeContrast: 2.0, // how strongly the far walls hide the page: 2 gives them equal contrast on white and black
   uColorAlpha: 1.0, //   above 1, makes dispersed colour more opaque, so it is as deep on white as on black
+  uDistortion: 0.75, //  how far the glass shifts the backdrop, relative to the far walls
+  uFringe: 0.05, //      how far the backdrop's colours split at its edges, relative to the far walls
 };
 
 /* Outline traced from the brandmark artwork (1190 x 673 px), centred, y up,
@@ -168,6 +173,12 @@ const common = /* glsl */ `
   uniform float uIorViolet;
   uniform float uEdgeContrast;
   uniform float uColorAlpha;
+  uniform float uDistortion;
+  uniform float uFringe;
+
+  uniform sampler2D uBackdrop;
+  uniform float uBackdropOn;
+  uniform vec3 uPage;
 
   varying vec3 worldNormal;
   varying vec3 eyeVector;
@@ -266,6 +277,11 @@ const frontFragmentShader = /* glsl */ `
     return top + bottom * (1.0 - top.a);
   }
 
+  vec3 toSRGB(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
+  }
+
   void main() {
     vec2 uv = gl_FragCoord.xy / uResolution;
     vec2 aspect = vec2(uResolution.y / uResolution.x, 1.0);
@@ -282,10 +298,13 @@ const frontFragmentShader = /* glsl */ `
     meanBend /= 1.0 + length(meanBend) * uBendLimit;
     float gap = length(meanBend) * uChromaticAberration / float(SAMPLES);
     float lod = log2(max(max(gap, uSoftness) * uResolution.y * uZoom, 1.0));
+    float backdropLod = log2(max(max(gap * uDistortion * uFringe, uSoftness) * uResolution.y * uZoom, 1.0));
 
     vec3 glints = vec3(0.0);
     vec3 walls = vec3(0.0);
     vec3 weight = vec3(0.0);
+    vec3 behind = vec3(0.0); // backdrop colour, premultiplied
+    vec3 cover = vec3(0.0); //  backdrop coverage, per channel
 
     for (int i = 0; i < SAMPLES; i++) {
       float t = (float(i) + jitter) / float(SAMPLES);
@@ -296,12 +315,34 @@ const frontFragmentShader = /* glsl */ `
       // a face seen at grazing would otherwise throw its samples half a screen away
       bend /= 1.0 + length(bend) * uBendLimit;
       vec2 offset = bend * aspect * (uRefractPower + t * uChromaticAberration) * uZoom;
+      vec2 backdropOffset = bend * aspect * (uRefractPower + t * uChromaticAberration * uFringe) * uZoom * uDistortion;
 
       vec2 s = textureLod(uTexture, uv + offset, lod).rg;
       vec3 w = spectrum(t);
       glints += s.r * w;
       walls += s.g * w;
       weight += w;
+
+      if (uBackdropOn > 0.5) {
+        vec4 b = textureLod(uBackdrop, uv + backdropOffset, backdropLod);
+        behind += b.rgb * w;
+        cover += b.a * w;
+      }
+    }
+
+    /* The backdrop seen through the glass. Every channel was sampled at its
+       own offset, so every channel has its own coverage. Where an edge splits
+       them, the page shows through in some channels and not in others, and
+       that difference, in the page's colour, is the fringe. */
+    vec4 seen = vec4(0.0);
+    if (uBackdropOn > 0.5) {
+      behind /= weight;
+      cover /= weight;
+      // three.js writes linear light into a target but sRGB onto the canvas,
+      // so encode what came through, or it would look darker than beside it
+      behind = toSRGB(behind / max(cover, vec3(1e-4))) * cover;
+      float covered = max(max(cover.r, cover.g), cover.b);
+      seen = vec4(behind + (covered - cover) * uPage, covered);
     }
 
     glints = max(sat(uColor * glints / weight, uSaturation), 0.0);
@@ -322,8 +363,9 @@ const frontFragmentShader = /* glsl */ `
     vec4 body = vec4(uColor * uDimTone * dim, dim);
 
     /* The walls are the glass itself: bright on black, the dark edge of the
-       glass on white. The glints are light passing through it. */
-    vec4 color = over(layer(glints, 0.0), over(layer(walls, uEdgeContrast), body));
+       glass on white. The glints are light passing through it. The body dims
+       the refracted backdrop just as it dims the page. */
+    vec4 color = over(layer(glints, 0.0), over(layer(walls, uEdgeContrast), over(body, seen)));
 
     /* The near face's own Blinn-Phong: a sharp streak along the walls, added
        on top as reflected light. */
@@ -356,6 +398,7 @@ export function createGlassBolt(container, options = {}) {
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setClearColor(0x000000, 0);
+  renderer.autoClear = false; // the canvas takes two draws a frame, so clears are explicit
   renderer.domElement.style.cssText = 'display:block;width:100%;height:100%;';
   container.appendChild(renderer.domElement);
 
@@ -369,6 +412,9 @@ export function createGlassBolt(container, options = {}) {
     uColor: { value: new THREE.Color(1, 1, 1) }, // pure white: the glass adds no tint
     uLight: { value: new THREE.Vector3(...DEFAULTS.uLight) },
     uZoom: { value: 1 },
+    uPage: { value: new THREE.Vector3(1, 1, 1) },
+    uBackdrop: { value: null },
+    uBackdropOn: { value: 0 },
   };
   for (const [name, value] of Object.entries({ ...DEFAULTS, ...LOOK })) {
     if (!uniforms[name]) uniforms[name] = { value };
@@ -410,6 +456,19 @@ export function createGlassBolt(container, options = {}) {
   // half float keeps the HDR streaks; the mip chain is what the cone sampling reads
   const backTarget = new THREE.WebGLRenderTarget(1, 1, {
     type: THREE.HalfFloatType,
+    samples: 4,
+    generateMipmaps: true,
+    minFilter: THREE.LinearMipmapLinearFilter,
+  });
+
+  /* The backdrop: anything added to this group is drawn behind the mark and
+     refracted by it, in bolt units (the bolt is 2 tall, centred on 0, 0). It
+     is drawn into a target of its own for the near faces to sample, and onto
+     the canvas as it is. Empty, it costs nothing. */
+  const backdropScene = new THREE.Scene();
+  const backdrop = new THREE.Group();
+  backdropScene.add(backdrop);
+  const behindTarget = new THREE.WebGLRenderTarget(1, 1, {
     samples: 4,
     generateMipmaps: true,
     minFilter: THREE.LinearMipmapLinearFilter,
@@ -487,6 +546,7 @@ export function createGlassBolt(container, options = {}) {
     renderer.setSize(w, h, false);
     renderer.getDrawingBufferSize(size);
     backTarget.setSize(size.x, size.y);
+    behindTarget.setSize(size.x, size.y);
     uniforms.uResolution.value.copy(size);
 
     camera.aspect = w / h;
@@ -499,15 +559,33 @@ export function createGlassBolt(container, options = {}) {
 
   function renderFrame() {
     applyView();
+    backdrop.scale.setScalar(mesh.scale.x); // bolt units, like the mark
+    const showBackdrop = backdrop.children.some((child) => child.visible);
+    uniforms.uBackdropOn.value = showBackdrop ? 1 : 0;
+
+    if (showBackdrop) {
+      renderer.setRenderTarget(behindTarget);
+      renderer.clear();
+      renderer.render(backdropScene, camera);
+    }
 
     mesh.material = backMaterial;
     uniforms.uTexture.value = null;
+    uniforms.uBackdrop.value = null;
     renderer.setRenderTarget(backTarget);
+    renderer.clear();
     renderer.render(scene, camera);
 
+    // the backdrop goes on the canvas as it is; the near faces then cover it with their refracted view of it
     mesh.material = frontMaterial;
     uniforms.uTexture.value = backTarget.texture;
+    uniforms.uBackdrop.value = showBackdrop ? behindTarget.texture : null;
     renderer.setRenderTarget(null);
+    renderer.clear();
+    if (showBackdrop) {
+      renderer.render(backdropScene, camera);
+      renderer.clearDepth(); // behind the mark, whatever depth its objects were drawn at
+    }
     renderer.render(scene, camera);
   }
 
@@ -638,6 +716,10 @@ export function createGlassBolt(container, options = {}) {
     set zoom(value) {
       setZoom(value);
     },
+    /* A three.js Group behind the mark, in bolt units. Whatever is added to
+       it is drawn on the canvas and seen bent through the glass. The caller
+       owns what it adds, and disposes of it. */
+    backdrop,
     dispose() {
       cancelAnimationFrame(raf);
       observer.disconnect();
@@ -652,6 +734,7 @@ export function createGlassBolt(container, options = {}) {
       backMaterial.dispose();
       frontMaterial.dispose();
       backTarget.dispose();
+      behindTarget.dispose();
       renderer.dispose();
       renderer.domElement.remove();
     },

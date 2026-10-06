@@ -39,7 +39,22 @@ Each frame draws the mark twice, after Maxime Heckel's article on refraction and
 1. The back faces go into an offscreen render target.
 2. The front faces go to the screen. For each pixel, the front pass samples that capture 24 times. Each sample uses a slightly different index of refraction, from red to violet, and the results are weighted by colour and averaged.
 
-The scene holds nothing else, and the canvas is transparent.
+The canvas is transparent.
+
+## Distortion
+
+The glass bends whatever is drawn behind it in its own canvas. `bolt.backdrop` is a three.js `Group` placed behind the mark, in bolt units (the bolt is 2 tall, centred on 0, 0). Anything added to it is drawn on the canvas and seen through the glass shifted, with a faint colour fringe at its edges:
+
+```js
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.min.js';
+
+const bar = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 2.6), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+bolt.backdrop.add(bar);
+```
+
+`uDistortion` (0.75) sets how far the glass shifts it. `uFringe` (0.05) sets how far its colours split.
+
+The HTML page under the canvas is out of reach: WebGL cannot see it. Over a plain section there is nothing to bend, so with an empty backdrop the mark looks exactly as it did in v2.0.0, and the backdrop costs nothing.
 
 ## The two versions
 

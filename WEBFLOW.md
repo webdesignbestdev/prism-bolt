@@ -21,12 +21,12 @@ Everything else about the look is identical: refraction, dispersion, light, spin
 Go to **Site settings → Custom code → Footer code** and paste:
 
 ```html
-<script type="module" src="https://cdn.jsdelivr.net/gh/webdesignbestdev/prism-bolt@v2.0.0/embed.js"></script>
+<script type="module" src="https://cdn.jsdelivr.net/gh/webdesignbestdev/prism-bolt@v2.1.0/embed.js"></script>
 ```
 
 Save. If the bolt only appears on one page, put the same line in that page's settings instead: the gear icon on the page in the Pages panel, then **Custom code → Before `</body>` tag**.
 
-`@v2.0.0` pins the version. The file at that URL never changes, so nothing updates on the live site until you change that number yourself.
+`@v2.1.0` pins the version. The file at that URL never changes, so nothing updates on the live site until you change that number yourself.
 
 > Webflow runs custom code on the published site only, not in the Designer canvas. In the Designer the div stays empty. Publish to your `.webflow.io` staging domain to see the bolt.
 
@@ -83,6 +83,7 @@ Example: a still bolt that fills more of its box gets `data-spin = 0` and `data-
 - **No WebGL.** On the rare browser without it, the div stays empty and the rest of the page is unaffected.
 - **Performance.** On an Intel HD 630 one full-screen mark renders in about 10 ms a frame. A smaller div is a cheaper render.
 - **The old embed.** `prism-bolt.min.js` from the earlier build still loads from `@v1.0.0`. If the site still has that script tag, remove it when you add this one.
+- **Distortion.** The glass bends whatever is drawn behind it inside its own canvas (see *Distortion* in the README). It cannot see the Webflow page itself: text, images and other elements under the mark are HTML, and the browser keeps that out of WebGL's reach. On a plain white or black section there is nothing to bend, so the mark looks the same as in v2.0.0.
 
 ## 6. Driving it from your own code
 
@@ -106,14 +107,14 @@ If a mark is added to the page after load, for example in CMS content loaded lat
 3. Commit and push, then tag the new version:
 
    ```bash
-   git tag v2.0.1
+   git tag v2.1.1
    ```
 
    ```bash
-   git push origin v2.0.1
+   git push origin v2.1.1
    ```
 
-4. In Webflow, change `@v2.0.0` to `@v2.0.1` in the footer script and publish.
+4. In Webflow, change `@v2.1.0` to `@v2.1.1` in the footer script and publish.
 
 ## 8. If nothing shows
 
