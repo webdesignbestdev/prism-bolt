@@ -151,6 +151,7 @@ const common = /* glsl */ `
   uniform float uZoom;
   uniform float uSoftness;
   uniform float uCaptureLod; // mip levels the far-wall capture is rendered below the canvas
+  uniform vec2 uCropOrigin; //  where the canvas sits in the full frame, device px from the bottom left
 
   uniform float uRefractPower;
   uniform float uChromaticAberration;
@@ -284,7 +285,9 @@ const frontFragmentShader = /* glsl */ `
   }
 
   void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
+    // this pixel's place in the full frame, so every pixel shades as if the canvas were uncropped
+    vec2 frag = gl_FragCoord.xy + uCropOrigin;
+    vec2 uv = frag / uResolution;
     vec2 aspect = vec2(uResolution.y / uResolution.x, 1.0);
     vec3 normal = normalize(worldNormal);
     vec3 eye = normalize(eyeVector);
@@ -294,7 +297,7 @@ const frontFragmentShader = /* glsl */ `
        neighbour, so the fan is one continuous spectrum, never SAMPLES copies.
        uSoftness keeps a floor under that blur so the refracted walls never
        come through razor sharp. Zoom magnifies both with the mark. */
-    float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    float jitter = fract(52.9829189 * fract(dot(frag, vec2(0.06711056, 0.00583715))));
     vec2 meanBend = (viewMatrix * vec4(refract(eye, normal, 2.0 / (uIorRed + uIorViolet)), 0.0)).xy;
     meanBend /= 1.0 + length(meanBend) * uBendLimit;
     float gap = length(meanBend) * uChromaticAberration / float(SAMPLES);
@@ -414,6 +417,7 @@ export function createGlassBolt(container, options = {}) {
     uLight: { value: new THREE.Vector3(...DEFAULTS.uLight) },
     uZoom: { value: 1 },
     uCaptureLod: { value: 0 },
+    uCropOrigin: { value: new THREE.Vector2(0, 0) },
     uPage: { value: new THREE.Vector3(1, 1, 1) },
     uBackdrop: { value: null },
     uBackdropOn: { value: 0 },
@@ -476,9 +480,20 @@ export function createGlassBolt(container, options = {}) {
     minFilter: THREE.LinearMipmapLinearFilter,
   });
 
-  const size = new THREE.Vector2();
+  const size = new THREE.Vector2(); // the full frame in device px: what the canvas would be uncropped
   let width = 1;
   let height = 1;
+  let pixelRatio = 1;
+
+  /* The canvas covers only the part of the frame the mark can reach as it
+     turns, in device px of the full frame, y up from the bottom. Everything
+     outside it is transparent in every frame, so clearing, resolving and
+     compositing it was pure cost. The near faces still place and shade every
+     pixel by its position in the full frame, and the far-wall capture they
+     read stays full-frame, so what is drawn is unchanged. (A cropped capture
+     would be cheaper still, but its mip levels would not line up with the
+     full frame's, and the thin streaks along the walls show the difference.) */
+  const crop = { on: false, x: 0, y: 0, w: 1, h: 1 };
 
   /* Zoom is a crop of the full frame (setViewOffset), not a camera move, so
      the eye vectors and therefore the refraction stay exactly as they were,
@@ -495,7 +510,7 @@ export function createGlassBolt(container, options = {}) {
     center: new THREE.Vector2(0.5, 0.5),
   };
 
-  function applyView() {
+  function applyView(uncropped = false) {
     const z = view.zoom;
     const c = view.center;
     c.set(view.anchor.x - (view.pin.x - 0.5) / z, view.anchor.y - (view.pin.y - 0.5) / z);
@@ -507,7 +522,17 @@ export function createGlassBolt(container, options = {}) {
       c.set(0.5, 0.5);
     }
     view.anchor.set(c.x + (view.pin.x - 0.5) / z, c.y + (view.pin.y - 0.5) / z);
-    camera.setViewOffset(width, height, (c.x - 0.5 / z) * width, (c.y - 0.5 / z) * height, width / z, height / z);
+    const vx = (c.x - 0.5 / z) * width;
+    const vy = (c.y - 0.5 / z) * height;
+    const vw = width / z;
+    const vh = height / z;
+    if (crop.on && !uncropped) {
+      // the same frame, narrowed to the cropped canvas (crop.y counts up from the bottom)
+      const top = size.y - crop.y - crop.h;
+      camera.setViewOffset(width, height, vx + (crop.x / size.x) * vw, vy + (top / size.y) * vh, (crop.w / size.x) * vw, (crop.h / size.y) * vh);
+    } else {
+      camera.setViewOffset(width, height, vx, vy, vw, vh);
+    }
     uniforms.uZoom.value = z;
   }
 
@@ -544,10 +569,9 @@ export function createGlassBolt(container, options = {}) {
     const h = Math.max(1, container.clientHeight);
     width = w;
     height = h;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setSize(w, h, false);
-    renderer.getDrawingBufferSize(size);
-    sizeCapture();
+    pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    // the full frame, sized exactly as three.js sizes an uncropped canvas
+    size.set(Math.floor(w * pixelRatio), Math.floor(h * pixelRatio));
     behindTarget.setSize(size.x, size.y);
     uniforms.uResolution.value.copy(size);
 
@@ -557,6 +581,133 @@ export function createGlassBolt(container, options = {}) {
     const visibleH = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.position.z;
     const visibleW = visibleH * camera.aspect;
     mesh.scale.setScalar(Math.min(visibleW / BOLT_WIDTH, visibleH / BOLT_HEIGHT) * opts.fill);
+
+    fitCrop();
+    sizeCapture();
+  }
+
+  /* Cropping needs a fixed framing and nothing drawn outside the mark: a
+     zoomable mark pans and zooms, and a backdrop fills the whole frame, so
+     either one keeps the full canvas. */
+  const cropWanted = () => !opts.zoomable && !backdrop.children.some((child) => child.visible);
+
+  const CROP_PAD = 4; //    device px kept round the mark, for antialiased edges and the sampling between angles
+  const CROP_TURNS = 90; // angles sampled round a full turn
+  const cropPoint = new THREE.Vector3();
+
+  /* The step, in canvas px, that a crop edge must sit on along one axis so
+     that it lands on a whole css px and a whole device px at once, given the
+     css px per canvas px. Edges anywhere else are rounded by layout and
+     resampled differently from the uncropped canvas. 0 when no small step
+     works: that axis then keeps its full extent. */
+  function cropStep(cssPerPx, dpr) {
+    const whole = (value) => Math.abs(value - Math.round(value)) < 1e-6;
+    for (let step = 1; step <= 16; step++) {
+      if (whole(step * cssPerPx) && whole(step * cssPerPx * dpr)) return step;
+    }
+    return 0;
+  }
+
+  /* Every outline corner, on both faces, swept through a full turn about the
+     vertical axis and projected through the uncropped view: the box round all
+     of them is everywhere the mark can draw, at any angle. */
+  function fitCrop() {
+    crop.on = cropWanted();
+    if (crop.on) {
+      applyView(true);
+      camera.updateMatrixWorld();
+      const s = mesh.scale.x;
+      const half = opts.depth / 2;
+      let x0 = Infinity;
+      let y0 = Infinity;
+      let x1 = -Infinity;
+      let y1 = -Infinity;
+      for (const [px, py] of OUTLINE) {
+        for (const pz of [-half, half]) {
+          const r = Math.hypot(px, pz);
+          const phase = Math.atan2(pz, px);
+          for (let k = 0; k < CROP_TURNS; k++) {
+            const a = phase + (k / CROP_TURNS) * Math.PI * 2;
+            cropPoint.set(r * Math.cos(a) * s, py * s, r * Math.sin(a) * s).project(camera);
+            const gx = (cropPoint.x * 0.5 + 0.5) * size.x;
+            const gy = (cropPoint.y * 0.5 + 0.5) * size.y;
+            x0 = Math.min(x0, gx);
+            x1 = Math.max(x1, gx);
+            y0 = Math.min(y0, gy);
+            y1 = Math.max(y1, gy);
+          }
+        }
+      }
+      /* Each edge has to land where the uncropped canvas has a pixel boundary
+         on screen, or the page resamples the crop differently. At 2x that is
+         every canvas px; at 1.25x every fifth; and where an uncropped canvas
+         is stretched a hair to fill its box (1022 css px at 1.25x is 1277.5
+         device px, drawn from 1277), nowhere, so that axis is left whole. */
+      const box = container.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const stepX = cropStep(box.width / size.x, dpr);
+      const stepY = cropStep(box.height / size.y, dpr);
+      if (stepX) {
+        x0 = Math.max(0, Math.floor((x0 - CROP_PAD) / stepX) * stepX);
+        x1 = Math.min(size.x, Math.ceil((x1 + CROP_PAD) / stepX) * stepX);
+      } else {
+        x0 = 0;
+        x1 = size.x;
+      }
+      if (stepY) {
+        // y counts up from the bottom, but the steps count down from the top
+        const top = Math.max(0, Math.floor((size.y - y1 - CROP_PAD) / stepY) * stepY);
+        const bottom = Math.min(size.y, Math.ceil((size.y - y0 + CROP_PAD) / stepY) * stepY);
+        y1 = size.y - top;
+        y0 = size.y - bottom;
+      } else {
+        y0 = 0;
+        y1 = size.y;
+      }
+      const whole = x0 === 0 && y0 === 0 && x1 === size.x && y1 === size.y;
+      if (x1 > x0 && y1 > y0 && !whole) {
+        crop.x = x0;
+        crop.y = y0;
+        crop.w = x1 - x0;
+        crop.h = y1 - y0;
+      } else {
+        crop.on = false;
+      }
+    }
+    if (!crop.on) {
+      crop.x = 0;
+      crop.y = 0;
+      crop.w = size.x;
+      crop.h = size.y;
+    }
+    uniforms.uCropOrigin.value.set(crop.x, crop.y);
+    sizeCanvas();
+  }
+
+  /* Uncropped, the canvas is sized exactly as before. Cropped, it is sized in
+     device px and moved to where those pixels sit in the full frame, so the
+     page shows each one in the same place as an uncropped canvas would. */
+  function sizeCanvas() {
+    const style = renderer.domElement.style;
+    if (!crop.on) {
+      renderer.setPixelRatio(pixelRatio);
+      renderer.setSize(width, height, false);
+      style.width = '100%';
+      style.height = '100%';
+      style.transform = '';
+      return;
+    }
+    renderer.setPixelRatio(1);
+    renderer.setSize(crop.w, crop.h, false);
+    // css px per canvas px, from the box's exact size: an uncropped canvas fills
+    // the box at 100%, so this is the stretch it was drawn with
+    const box = container.getBoundingClientRect();
+    const sx = box.width / size.x;
+    const sy = box.height / size.y;
+    const top = size.y - crop.y - crop.h;
+    style.width = `${crop.w * sx}px`;
+    style.height = `${crop.h * sy}px`;
+    style.transform = crop.x || top ? `translate(${crop.x * sx}px, ${top * sy}px)` : '';
   }
 
   /* The near faces never read the far-wall capture sharper than uSoftness of
@@ -588,8 +739,9 @@ export function createGlassBolt(container, options = {}) {
   }
 
   function renderFrame() {
+    if (cropWanted() !== crop.on) fitCrop(); // a backdrop added or cleared since the last frame
     sizeCapture();
-    applyView();
+    applyView(true); // the backdrop and the capture see the full frame
     backdrop.scale.setScalar(mesh.scale.x); // bolt units, like the mark
     const showBackdrop = backdrop.children.some((child) => child.visible);
     uniforms.uBackdropOn.value = showBackdrop ? 1 : 0;
@@ -609,6 +761,7 @@ export function createGlassBolt(container, options = {}) {
 
     // the backdrop goes on the canvas as it is; the near faces then cover it with their refracted view of it
     mesh.material = frontMaterial;
+    applyView(); // the canvas sees only its crop of it
     uniforms.uTexture.value = backTarget.texture;
     uniforms.uBackdrop.value = showBackdrop ? behindTarget.texture : null;
     renderer.setRenderTarget(null);
