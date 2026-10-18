@@ -21,12 +21,12 @@ Everything else about the look is identical: refraction, dispersion, light, spin
 Go to **Site settings → Custom code → Footer code** and paste:
 
 ```html
-<script type="module" src="https://cdn.jsdelivr.net/gh/webdesignbestdev/prism-bolt@v2.1.1/embed.js"></script>
+<script type="module" src="https://cdn.jsdelivr.net/gh/webdesignbestdev/prism-bolt@v2.1.2/embed.js"></script>
 ```
 
 Save. If the bolt only appears on one page, put the same line in that page's settings instead: the gear icon on the page in the Pages panel, then **Custom code → Before `</body>` tag**.
 
-`@v2.1.1` pins the version. The file at that URL never changes, so nothing updates on the live site until you change that number yourself.
+`@v2.1.2` pins the version. The file at that URL never changes, so nothing updates on the live site until you change that number yourself.
 
 > Webflow runs custom code on the published site only, not in the Designer canvas. In the Designer the div stays empty. Publish to your `.webflow.io` staging domain to see the bolt.
 
@@ -107,14 +107,14 @@ If a mark is added to the page after load, for example in CMS content loaded lat
 3. Commit and push, then tag the new version:
 
    ```bash
-   git tag v2.1.2
+   git tag v2.1.3
    ```
 
    ```bash
-   git push origin v2.1.2
+   git push origin v2.1.3
    ```
 
-4. In Webflow, change `@v2.1.1` to `@v2.1.2` in the footer script and publish.
+4. In Webflow, change `@v2.1.2` to `@v2.1.3` in the footer script and publish.
 
 ## 8. If nothing shows
 
