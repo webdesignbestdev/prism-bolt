@@ -150,6 +150,7 @@ const common = /* glsl */ `
   uniform vec3 uColor;
   uniform float uZoom;
   uniform float uSoftness;
+  uniform float uCaptureLod; // mip levels the far-wall capture is rendered below the canvas
 
   uniform float uRefractPower;
   uniform float uChromaticAberration;
@@ -317,7 +318,7 @@ const frontFragmentShader = /* glsl */ `
       vec2 offset = bend * aspect * (uRefractPower + t * uChromaticAberration) * uZoom;
       vec2 backdropOffset = bend * aspect * (uRefractPower + t * uChromaticAberration * uFringe) * uZoom * uDistortion;
 
-      vec2 s = textureLod(uTexture, uv + offset, lod).rg;
+      vec2 s = textureLod(uTexture, uv + offset, lod - uCaptureLod).rg;
       vec3 w = spectrum(t);
       glints += s.r * w;
       walls += s.g * w;
@@ -412,6 +413,7 @@ export function createGlassBolt(container, options = {}) {
     uColor: { value: new THREE.Color(1, 1, 1) }, // pure white: the glass adds no tint
     uLight: { value: new THREE.Vector3(...DEFAULTS.uLight) },
     uZoom: { value: 1 },
+    uCaptureLod: { value: 0 },
     uPage: { value: new THREE.Vector3(1, 1, 1) },
     uBackdrop: { value: null },
     uBackdropOn: { value: 0 },
@@ -545,7 +547,7 @@ export function createGlassBolt(container, options = {}) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(w, h, false);
     renderer.getDrawingBufferSize(size);
-    backTarget.setSize(size.x, size.y);
+    sizeCapture();
     behindTarget.setSize(size.x, size.y);
     uniforms.uResolution.value.copy(size);
 
@@ -557,7 +559,36 @@ export function createGlassBolt(container, options = {}) {
     mesh.scale.setScalar(Math.min(visibleW / BOLT_WIDTH, visibleH / BOLT_HEIGHT) * opts.fill);
   }
 
+  /* The near faces never read the far-wall capture sharper than uSoftness of
+     the frame height: that floor is the least mip level in the front pass. On
+     a large canvas it sits several levels down, so the levels above it are
+     rendered and filtered only to be skipped. The capture is rendered smaller
+     instead, and the front pass reads that many levels less far down, which
+     lands on the same blur.
+
+     It stops one level short of the floor. Rendered right at the floor, each
+     texel gets only its own 4 MSAA samples where the full-size capture
+     averaged dozens, and the thin streaks along the walls alias: visible on
+     the black version as the mark turns. One level of headroom keeps them
+     sampled finely enough to match. So nothing shrinks until the floor is two
+     levels down, which in practice means large canvases on hi-DPI screens:
+     the ones that cost the most.
+
+     Zoom scales the floor with the mark; a zoomable mark can go as far out as
+     minZoom, so that is the zoom it plans for. Cheap enough to run every
+     frame, so a tuner that changes uSoftness is followed at once; setSize
+     does nothing when the size holds. */
+  function sizeCapture() {
+    const zoom = opts.zoomable ? opts.minZoom : restZoom;
+    const floor = Math.log2(Math.max(uniforms.uSoftness.value * size.y * zoom, 1));
+    const levels = Math.max(0, Math.floor(floor) - 1);
+    const scale = 2 ** levels;
+    backTarget.setSize(Math.max(1, Math.round(size.x / scale)), Math.max(1, Math.round(size.y / scale)));
+    uniforms.uCaptureLod.value = levels;
+  }
+
   function renderFrame() {
+    sizeCapture();
     applyView();
     backdrop.scale.setScalar(mesh.scale.x); // bolt units, like the mark
     const showBackdrop = backdrop.children.some((child) => child.visible);
